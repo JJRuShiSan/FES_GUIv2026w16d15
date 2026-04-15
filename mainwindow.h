@@ -26,14 +26,16 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
-    // Optional: set different image paths at runtime
     void setImagePaths(const QString &carrierPath, const QString &amPath);
 
 signals:
     void amplitudeChanged(double newAmplitude);
 
 public:
-    double getAmplitude() const { return amplitude; }
+    double getAmplitude()  const { return amplitude; }
+    double getRampUp()     const { return rampUp; }
+    double getCoast()      const { return coast; }
+    double getRampDown()   const { return rampDown; }
 
     double getCarrierFreq() const {
         QString carrierText = lblCarrier->text();
@@ -58,42 +60,107 @@ public:
     }
 
 private slots:
-    void onPlusClicked();
-    void onMinusClicked();
-    void onPlusHold();
-    void onMinusHold();
-    void stopHold();
+    // Amplitude
+    void onAmpPlusClicked();    void onAmpMinusClicked();
+    void onAmpPlusHold();       void onAmpMinusHold();
+    // Ramp Up
+    void onRampUpPlusClicked(); void onRampUpMinusClicked();
+    void onRampUpPlusHold();    void onRampUpMinusHold();
+    // Coast
+    void onCoastPlusClicked();  void onCoastMinusClicked();
+    void onCoastPlusHold();     void onCoastMinusHold();
+    // Ramp Down
+    void onRampDownPlusClicked(); void onRampDownMinusClicked();
+    void onRampDownPlusHold();    void onRampDownMinusHold();
+
+    void stopAllHolds();
     void onElectrodeMatrixClicked();
     void onCarrierClicked();
     void onAMClicked();
 
+    // Legacy slot aliases kept for backward compat
+    void onPlusClicked()  { onAmpPlusClicked(); }
+    void onMinusClicked() { onAmpMinusClicked(); }
+    void onPlusHold()     { onAmpPlusHold(); }
+    void onMinusHold()    { onAmpMinusHold(); }
+    void stopHold()       { stopAllHolds(); }
+
 private:
     SpiHandler *spiHandler;
 
-private:
-    // UI
-    QWidget    *topBar = nullptr;
-    QLabel     *titleLabel = nullptr;
-    QPushButton *plusBtn = nullptr;
-    QPushButton *minusBtn = nullptr;
-    QPushButton *electrodeBtn = nullptr;
-    QLineEdit  *amplitudeDisplay = nullptr;
-    ClickableLabel *carrierPic = nullptr;
-    ClickableLabel *amPic = nullptr;
-    QLabel     *lblCarrier = nullptr;
-    QLabel     *lblAM = nullptr;
+    // UI – top bar
+    QWidget *topBar    = nullptr;
+    QLabel  *titleLabel = nullptr;
+
+    // UI – Amplitude
+    QPushButton *ampPlusBtn   = nullptr;
+    QPushButton *ampMinusBtn  = nullptr;
+    QLineEdit   *amplitudeDisplay = nullptr;
+
+    // UI – Ramp Up
+    QPushButton *rampUpPlusBtn  = nullptr;
+    QPushButton *rampUpMinusBtn = nullptr;
+    QLineEdit   *rampUpDisplay  = nullptr;
+
+    // UI – Coast
+    QPushButton *coastPlusBtn  = nullptr;
+    QPushButton *coastMinusBtn = nullptr;
+    QLineEdit   *coastDisplay  = nullptr;
+
+    // UI – Ramp Down
+    QPushButton *rampDownPlusBtn  = nullptr;
+    QPushButton *rampDownMinusBtn = nullptr;
+    QLineEdit   *rampDownDisplay  = nullptr;
+
+    // UI – right column
+    QPushButton    *electrodeBtn = nullptr;
+    ClickableLabel *carrierPic   = nullptr;
+    ClickableLabel *amPic        = nullptr;
+    QLabel         *lblCarrier   = nullptr;
+    QLabel         *lblAM        = nullptr;
 
     // State
-    double amplitude = 1.0;             // initial amplitude (clamped 1.0 - 5.0)
+    double amplitude = 1.0;   // 1.0 V  – 5.0 V
+    double rampUp    = 1.0;   // 0.1 V/s – 3.0 V/s
+    double coast     = 1.0;   // 0.0 s   – 10.0 s
+    double rampDown  = -1.0;  // -0.1 V/s – -3.0 V/s
 
-    // Hold timers
-    QTimer *plusHoldTimer = nullptr;
-    QTimer *minusHoldTimer = nullptr;
+    // Hold timers (one pair per parameter)
+    QTimer *ampPlusHoldTimer      = nullptr;  QTimer *ampMinusHoldTimer      = nullptr;
+    QTimer *rampUpPlusHoldTimer   = nullptr;  QTimer *rampUpMinusHoldTimer   = nullptr;
+    QTimer *coastPlusHoldTimer    = nullptr;  QTimer *coastMinusHoldTimer    = nullptr;
+    QTimer *rampDownPlusHoldTimer = nullptr;  QTimer *rampDownMinusHoldTimer = nullptr;
 
     // Helpers
     void updateAmplitudeDisplay();
-    double clampAmplitude(double val);
+    void updateRampUpDisplay();
+    void updateCoastDisplay();
+    void updateRampDownDisplay();
+
+    double clampAmplitude(double v);
+    double clampRampUp(double v);
+    double clampCoast(double v);
+    double clampRampDown(double v);
+
+    // Convenience: build a standard +/- row
+    QHBoxLayout* buildParamRow(QPushButton *&minusOut, QLineEdit *&displayOut,
+                               QPushButton *&plusOut,  const QString &initText);
+    // Convenience: make a standard red square button
+    QPushButton* makeRedBtn(const QString &label);
+    // Convenience: make a read-only display field
+    QLineEdit*   makeDisplay(const QString &initText);
+    // Wire a hold timer to a button
+    void wireHold(QPushButton *btn, QTimer *&holdTimer,
+                  void (MainWindow::*holdSlot)(),
+                  void (MainWindow::*clickSlot)());
+
     void loadImages(const QString &carrierPath, const QString &amPath);
+
+    // kept for legacy
+    QPushButton *plusBtn  = nullptr;
+    QPushButton *minusBtn = nullptr;
+    QTimer *plusHoldTimer  = nullptr;
+    QTimer *minusHoldTimer = nullptr;
 };
 
 #endif // MAINWINDOW_H
