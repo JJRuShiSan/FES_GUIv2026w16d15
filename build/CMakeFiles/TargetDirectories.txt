@@ -1,0 +1,4 @@
+/home/fes2025/Desktop/GUI1.2v2025_11_15/build/CMakeFiles/FES_Thesis_GUI.dir
+/home/fes2025/Desktop/GUI1.2v2025_11_15/build/CMakeFiles/edit_cache.dir
+/home/fes2025/Desktop/GUI1.2v2025_11_15/build/CMakeFiles/rebuild_cache.dir
+/home/fes2025/Desktop/GUI1.2v2025_11_15/build/CMakeFiles/FES_Thesis_GUI_autogen.dir

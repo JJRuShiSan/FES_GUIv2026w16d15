@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/">
+        <file>FES.png</file>
+        <file>AM_Frequency.png</file>
+        <file>Carrier_Frequency.png</file>
+    </qresource>
+</RCC>

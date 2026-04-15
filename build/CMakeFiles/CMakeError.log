@@ -1,0 +1,44 @@
+Performing C++ SOURCE FILE Test HAVE_STDATOMIC failed with the following output:
+Change Dir: /home/fes2025/Desktop/GUI1.2v2025_11_15/build/CMakeFiles/CMakeScratch/TryCompile-8OcD5y
+
+Run Build Command(s):/usr/bin/gmake -f Makefile cmTC_e9cde/fast && /usr/bin/gmake  -f CMakeFiles/cmTC_e9cde.dir/build.make CMakeFiles/cmTC_e9cde.dir/build
+gmake[1]: Entering directory '/home/fes2025/Desktop/GUI1.2v2025_11_15/build/CMakeFiles/CMakeScratch/TryCompile-8OcD5y'
+Building CXX object CMakeFiles/cmTC_e9cde.dir/src.cxx.o
+/usr/bin/c++ -DHAVE_STDATOMIC   -o CMakeFiles/cmTC_e9cde.dir/src.cxx.o -c /home/fes2025/Desktop/GUI1.2v2025_11_15/build/CMakeFiles/CMakeScratch/TryCompile-8OcD5y/src.cxx
+Linking CXX executable cmTC_e9cde
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_e9cde.dir/link.txt --verbose=1
+/usr/bin/c++ CMakeFiles/cmTC_e9cde.dir/src.cxx.o -o cmTC_e9cde 
+/usr/bin/ld: CMakeFiles/cmTC_e9cde.dir/src.cxx.o: in function `main':
+src.cxx:(.text+0x248): undefined reference to `__atomic_load_8'
+/usr/bin/ld: CMakeFiles/cmTC_e9cde.dir/src.cxx.o: in function `std::__atomic_base<long long>::operator++() volatile':
+src.cxx:(.text._ZNVSt13__atomic_baseIxEppEv[_ZNVSt13__atomic_baseIxEppEv]+0x28): undefined reference to `__atomic_fetch_add_8'
+collect2: error: ld returned 1 exit status
+gmake[1]: *** [CMakeFiles/cmTC_e9cde.dir/build.make:99: cmTC_e9cde] Error 1
+gmake[1]: Leaving directory '/home/fes2025/Desktop/GUI1.2v2025_11_15/build/CMakeFiles/CMakeScratch/TryCompile-8OcD5y'
+gmake: *** [Makefile:127: cmTC_e9cde/fast] Error 2
+
+
+Source file was:
+#include <atomic>
+#include <cstdint>
+
+int main(int, char **)
+{
+    volatile std::atomic<char>    size_1;
+    volatile std::atomic<short>   size_2;
+    volatile std::atomic<int>     size_4;
+    volatile std::atomic<int64_t> size_8;
+
+    ++size_1;
+    ++size_2;
+    ++size_4;
+    ++size_8;
+
+    (void)size_1.load(std::memory_order_relaxed);
+    (void)size_2.load(std::memory_order_relaxed);
+    (void)size_4.load(std::memory_order_relaxed);
+    (void)size_8.load(std::memory_order_relaxed);
+
+    return 0;
+}
+

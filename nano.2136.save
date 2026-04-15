@@ -1,0 +1,69 @@
+#include "spihandler.h"
+#include <cstring> // for memcpy
+
+#define SPI_CHANNEL 0        // SPI0 CE0 (use 1 for CE1)
+#define SPI_BAUD 1000000     // 1 MHz
+#define SPI_MODE 0           // CPOL=0, CPHA=0
+#define SPI_FLAG (SPI_MODE)  // Just mode bits, no special flags
+
+SpiHandler::SpiHandler(QObject *parent) : QObject(parent) {}
+
+SpiHandler::~SpiHandler()
+{
+    if (spiHandle >= 0)
+        spiClose(spiHandle);
+}
+
+bool SpiHandler::init() {
+    static bool initialized = false;
+    if (initialized) return true;
+    initialized = true;
+
+    if (gpioInitialise() < 0) {
+        std::cerr << "pigpio init failed!" << std::endl;
+        return false;
+    }
+
+    spiHandle = spiOpen(SPI_CHANNEL, SPI_BAUD, SPI_FLAG);
+    if (spiHandle < 0) {
+        std::cerr << "SPI open failed! Error code: " << spiHandle << std::endl;
+        gpioTerminate();
+        return false;
+    }
+
+    std::cout << "SPI initialized successfully on channel " << SPI_CHANNEL
+              << " at " << SPI_BAUD << " Hz" << std::endl;
+    return true;
+}
+
+
+void SpiHandler::sendAmplitude(double amplitude)
+{
+    if (spiHandle < 0) {
+        std::cerr << "SPI not initialized!" << std::endl;
+        return;
+    }
+
+    float amp = static_cast<float>(amplitude);
+    char tx[BUFFER_SIZE];
+    char rx[BUFFER_SIZE] = {0};
+
+    // copy float bytes into tx buffer
+    std::memcpy(tx, &amp, sizeof(float));
+
+    std::cout << "Sending amplitude: " << amp << std::endl;
+
+    int result = spiXfer(spiHandle, tx, rx, BUFFER_SIZE);
+    if (result < 0)
+    {
+        std::cerr << "SPI transfer failed! Error code: " << result << std::endl;
+        return;
+    }
+
+    float receivedAmp = 0.0f;
+    std::memcpy(&receivedAmp, rx, sizeof(float));
+
+    std::cout << std::fixed << std::setprecision(2)
+              << "Amplitude TX: " << amp
+              << " | RX (loopback): " << receivedAmp << std::endl;
+}

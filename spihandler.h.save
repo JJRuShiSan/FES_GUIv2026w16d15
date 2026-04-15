@@ -1,0 +1,23 @@
+#pragma once
+#include <QObject>
+#include <pigpio.h>
+#include <iostream>
+#include <iomanip>
+
+class SpiHandler : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit SpiHandler(QObject *parent = nullptr);
+    ~SpiHandler();
+
+    bool init();
+    void sendAmplitude(double amplitude);
+    
+    //static SpiHandler* instance();
+
+private:
+    int spiHandle = -1;
+    const int BUFFER_SIZE = 4; // enough for a float
+};

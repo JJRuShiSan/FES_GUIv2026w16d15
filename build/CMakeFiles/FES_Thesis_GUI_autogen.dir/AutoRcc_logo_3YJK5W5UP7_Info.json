@@ -1,0 +1,24 @@
+{
+	"BUILD_DIR" : "/home/fes2025/Desktop/GUI1.2v2025_11_15/build/FES_Thesis_GUI_autogen",
+	"CMAKE_BINARY_DIR" : "/home/fes2025/Desktop/GUI1.2v2025_11_15/build",
+	"CMAKE_CURRENT_BINARY_DIR" : "/home/fes2025/Desktop/GUI1.2v2025_11_15/build",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/home/fes2025/Desktop/GUI1.2v2025_11_15",
+	"CMAKE_SOURCE_DIR" : "/home/fes2025/Desktop/GUI1.2v2025_11_15",
+	"INCLUDE_DIR" : "/home/fes2025/Desktop/GUI1.2v2025_11_15/build/FES_Thesis_GUI_autogen/include",
+	"INPUTS" : 
+	[
+		"/home/fes2025/Desktop/GUI1.2v2025_11_15/resources/AM_Frequency.png",
+		"/home/fes2025/Desktop/GUI1.2v2025_11_15/resources/FES.png",
+		"/home/fes2025/Desktop/GUI1.2v2025_11_15/resources/Carrier_Frequency.png"
+	],
+	"LOCK_FILE" : "/home/fes2025/Desktop/GUI1.2v2025_11_15/build/CMakeFiles/FES_Thesis_GUI_autogen.dir/AutoRcc_logo_3YJK5W5UP7_Lock.lock",
+	"MULTI_CONFIG" : false,
+	"OPTIONS" : [ "-name", "logo" ],
+	"OUTPUT_CHECKSUM" : "3YJK5W5UP7",
+	"OUTPUT_NAME" : "qrc_logo.cpp",
+	"RCC_EXECUTABLE" : "/usr/lib/qt6/libexec/rcc",
+	"RCC_LIST_OPTIONS" : [ "--list" ],
+	"SETTINGS_FILE" : "/home/fes2025/Desktop/GUI1.2v2025_11_15/build/CMakeFiles/FES_Thesis_GUI_autogen.dir/AutoRcc_logo_3YJK5W5UP7_Used.txt",
+	"SOURCE" : "/home/fes2025/Desktop/GUI1.2v2025_11_15/resources/logo.qrc",
+	"VERBOSITY" : 0
+}
