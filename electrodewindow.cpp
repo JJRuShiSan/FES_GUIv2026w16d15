@@ -407,6 +407,9 @@ void ElectrodeWindow::onStartClicked()
     double amp = mw->getAmplitude();
     double carrier = mw->getCarrierFreq();
     double burst = mw->getBurstFreq();
+    double rampUp = mw->getRampUp();
+    double coast = mw->getCoast();
+    double rampDown = mw->getRampDown();
 
     g_setAmplitude = amp;
     g_carrierFreq = carrier;
@@ -436,9 +439,11 @@ void ElectrodeWindow::onStartClicked()
     }
 
     // Send combined electrode configuration + signal parameters in one SPI transaction
-    SpiHandler::instance()->sendCombinedConfiguration(electrodeData, 6, amp, carrier, burst);
+    SpiHandler::instance()->sendCombinedConfiguration(electrodeData, 6, amp, carrier, burst,
+                                                      rampUp, coast, rampDown);
     qDebug() << "[COMBINED] Electrode config + signal parameters sent to Pico";
-    qDebug() << "  Amplitude:" << amp << "V, Carrier:" << carrier << "Hz, Burst:" << burst << "Hz";
+    qDebug() << "  Amplitude:" << amp << "V, Carrier:" << carrier << "Hz, Burst:" << burst
+             << "Hz, RampUp:" << rampUp << "V/s, Coast:" << coast << "s, RampDown:" << rampDown << "V/s";
     
     qDebug() << "\n[SESSION] Starting session with" << selected.size() << "active electrodes";
 

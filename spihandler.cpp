@@ -53,7 +53,8 @@ void SpiHandler::initializeGPIOExpanders()
     std::cout << "[INFO] GPIO expander init skipped (auto-initialized at Pico startup)" << std::endl;
 }
 
-void SpiHandler::sendParameters(double amplitude, double carrierFreq, double burstFreq)
+void SpiHandler::sendParameters(double amplitude, double carrierFreq, double burstFreq,
+                                double rampUpRate, double coastDuration, double rampDownRate)
 {
     if (spiHandle < 0) {
         std::cerr << "SPI not initialized!" << std::endl;
@@ -64,31 +65,47 @@ void SpiHandler::sendParameters(double amplitude, double carrierFreq, double bur
     float amp = static_cast<float>(amplitude);
     float carrier = static_cast<float>(carrierFreq);
     float burst = static_cast<float>(burstFreq);
+    float rampUp = static_cast<float>(rampUpRate);
+    float coast = static_cast<float>(coastDuration);
+    float rampDown = static_cast<float>(rampDownRate);
 
     char tx[BUFFER_SIZE];
     char rx[BUFFER_SIZE] = {0};
 
     // Debug: verify float values before packing
-    std::cout << "DEBUG: amp=" << amp << ", carrier=" << carrier << ", burst=" << burst << std::endl;
+    std::cout << "DEBUG: amp=" << amp << ", carrier=" << carrier << ", burst=" << burst
+              << ", rampUp=" << rampUp << ", coast=" << coast << ", rampDown=" << rampDown << std::endl;
 
-    // Pack 3 floats into 12-byte buffer
+    // Pack 6 floats into 24-byte buffer
     std::memcpy(tx + 0, &amp, sizeof(float));      // Bytes 0-3: amplitude
     std::memcpy(tx + 4, &carrier, sizeof(float));  // Bytes 4-7: carrier freq
     std::memcpy(tx + 8, &burst, sizeof(float));    // Bytes 8-11: burst freq
+    std::memcpy(tx + 12, &rampUp, sizeof(float));  // Bytes 12-15: ramp-up rate
+    std::memcpy(tx + 16, &coast, sizeof(float));   // Bytes 16-19: coast duration
+    std::memcpy(tx + 20, &rampDown, sizeof(float));// Bytes 20-23: ramp-down rate
 
     // Debug: verify packing
-    float test_amp, test_carrier, test_burst;
+    float test_amp, test_carrier, test_burst, test_rampUp, test_coast, test_rampDown;
     std::memcpy(&test_amp, tx + 0, sizeof(float));
     std::memcpy(&test_carrier, tx + 4, sizeof(float));
     std::memcpy(&test_burst, tx + 8, sizeof(float));
+    std::memcpy(&test_rampUp, tx + 12, sizeof(float));
+    std::memcpy(&test_coast, tx + 16, sizeof(float));
+    std::memcpy(&test_rampDown, tx + 20, sizeof(float));
     std::cout << "DEBUG after memcpy: test_amp=" << test_amp
               << ", test_carrier=" << test_carrier
-              << ", test_burst=" << test_burst << std::endl;
+              << ", test_burst=" << test_burst
+              << ", test_rampUp=" << test_rampUp
+              << ", test_coast=" << test_coast
+              << ", test_rampDown=" << test_rampDown << std::endl;
 
     std::cout << "Sending parameters:" << std::endl;
     std::cout << "  Amplitude: " << amp << " V" << std::endl;
     std::cout << "  Carrier Freq: " << carrier << " Hz" << std::endl;
     std::cout << "  Burst Freq: " << burst << " Hz" << std::endl;
+    std::cout << "  Ramp Up Rate: " << rampUp << " V/s" << std::endl;
+    std::cout << "  Coast Duration: " << coast << " s" << std::endl;
+    std::cout << "  Ramp Down Rate: " << rampDown << " V/s" << std::endl;
 
     std::cout << "  TX bytes (raw): ";
     for (int i = 0; i < BUFFER_SIZE; i++) {
@@ -131,7 +148,7 @@ void SpiHandler::sendParameters(double amplitude, double carrierFreq, double bur
     spiXfer(spiHandle, &tx[0], &rx_discard, 1);
     gpioDelay(150);
 
-    // Transfers 1-11: send tx[i], receive rx[i-1] (echo of previous byte)
+    // Transfers 1..N-1: send tx[i], receive rx[i-1] (echo of previous byte)
     for (int i = 1; i < BUFFER_SIZE; i++) {
         int res = spiXfer(spiHandle, &tx[i], &rx[i-1], 1);
         if (res < 0) {
@@ -156,15 +173,24 @@ void SpiHandler::sendParameters(double amplitude, double carrierFreq, double bur
     float echoedAmp = 0.0f;
     float echoedCarrier = 0.0f;
     float echoedBurst = 0.0f;
+    float echoedRampUp = 0.0f;
+    float echoedCoast = 0.0f;
+    float echoedRampDown = 0.0f;
     std::memcpy(&echoedAmp, rx + 0, sizeof(float));
     std::memcpy(&echoedCarrier, rx + 4, sizeof(float));
     std::memcpy(&echoedBurst, rx + 8, sizeof(float));
+    std::memcpy(&echoedRampUp, rx + 12, sizeof(float));
+    std::memcpy(&echoedCoast, rx + 16, sizeof(float));
+    std::memcpy(&echoedRampDown, rx + 20, sizeof(float));
 
     std::cout << std::fixed << std::setprecision(2)
               << "  Echo (previous values):" << std::endl
               << "    Amplitude: " << echoedAmp << " V" << std::endl
               << "    Carrier: " << echoedCarrier << " Hz" << std::endl
-              << "    Burst: " << echoedBurst << " Hz" << std::endl;
+              << "    Burst: " << echoedBurst << " Hz" << std::endl
+              << "    Ramp Up: " << echoedRampUp << " V/s" << std::endl
+              << "    Coast: " << echoedCoast << " s" << std::endl
+              << "    Ramp Down: " << echoedRampDown << " V/s" << std::endl;
     std::cout << std::endl;
 }
 
@@ -452,7 +478,8 @@ float SpiHandler::requestCurrentAmplitude()
 }
 
 void SpiHandler::sendCombinedConfiguration(unsigned char* electrodeData, int electrodeDataSize,
-                                           double amplitude, double carrierFreq, double burstFreq)
+                                           double amplitude, double carrierFreq, double burstFreq,
+                                           double rampUpRate, double coastDuration, double rampDownRate)
 {
     if (spiHandle < 0) {
         std::cerr << "SPI not initialized!" << std::endl;
@@ -462,25 +489,33 @@ void SpiHandler::sendCombinedConfiguration(unsigned char* electrodeData, int ele
     std::cout << "\n=== Sending Combined Configuration (Electrode + Signal Params) ===" << std::endl;
     std::cout << "Electrode data size: " << electrodeDataSize << " bytes" << std::endl;
     std::cout << "Signal params: Amp=" << amplitude << "V, Carrier=" << carrierFreq 
-              << "Hz, Burst=" << burstFreq << "Hz" << std::endl;
+              << "Hz, Burst=" << burstFreq << "Hz, RampUp=" << rampUpRate
+              << "V/s, Coast=" << coastDuration << "s, RampDown=" << rampDownRate << "V/s" << std::endl;
 
-    // Total payload: 6 bytes electrode + 12 bytes signal params = 18 bytes
-    const int COMBINED_BUFFER_SIZE = 18;
+    // Total payload: 6 bytes electrode + 24 bytes signal params = 30 bytes
+    const int COMBINED_BUFFER_SIZE = 30;
     char tx[COMBINED_BUFFER_SIZE];
     char rx[COMBINED_BUFFER_SIZE] = {0};
+    std::memset(tx, 0, sizeof(tx));
 
     // Pack electrode data (6 bytes)
     for (int i = 0; i < electrodeDataSize && i < 6; i++) {
         tx[i] = electrodeData[i];
     }
 
-    // Pack signal parameters (12 bytes: 3 floats)
+    // Pack signal parameters (24 bytes: 6 floats)
     float amp = static_cast<float>(amplitude);
     float carrier = static_cast<float>(carrierFreq);
     float burst = static_cast<float>(burstFreq);
+    float rampUp = static_cast<float>(rampUpRate);
+    float coast = static_cast<float>(coastDuration);
+    float rampDown = static_cast<float>(rampDownRate);
     std::memcpy(tx + 6, &amp, sizeof(float));      // Bytes 6-9: amplitude
     std::memcpy(tx + 10, &carrier, sizeof(float)); // Bytes 10-13: carrier freq
     std::memcpy(tx + 14, &burst, sizeof(float));   // Bytes 14-17: burst freq
+    std::memcpy(tx + 18, &rampUp, sizeof(float));  // Bytes 18-21: ramp-up rate
+    std::memcpy(tx + 22, &coast, sizeof(float));   // Bytes 22-25: coast duration
+    std::memcpy(tx + 26, &rampDown, sizeof(float));// Bytes 26-29: ramp-down rate
 
     std::cout << "  TX bytes (raw): ";
     for (int i = 0; i < COMBINED_BUFFER_SIZE; i++) {
@@ -608,6 +643,7 @@ void SpiHandler::sendCombinedConfiguration(unsigned char* electrodeData, int ele
     }
     std::cout << std::dec << std::endl;
     std::cout << "  Signal params: Amp=" << amp << "V, Carrier=" << carrier 
-              << "Hz, Burst=" << burst << "Hz" << std::endl;
+              << "Hz, Burst=" << burst << "Hz, RampUp=" << rampUp
+              << "V/s, Coast=" << coast << "s, RampDown=" << rampDown << "V/s" << std::endl;
     std::cout << "=== End Combined Configuration ===\n" << std::endl;
 }

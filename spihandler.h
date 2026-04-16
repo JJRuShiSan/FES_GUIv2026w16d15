@@ -17,12 +17,14 @@ public:
 
     bool init();
     void initializeGPIOExpanders();  // NEW: Initialize GPIO expanders via Pico
-    void sendParameters(double amplitude, double carrierFreq, double burstFreq);
+    void sendParameters(double amplitude, double carrierFreq, double burstFreq,
+                        double rampUpRate, double coastDuration, double rampDownRate);
     void sendEmergencyStop();
     float requestCurrentAmplitude();  // NEW: Request current amplitude from Pico
     void sendElectrodeConfiguration(unsigned char* electrodeData, int dataSize);  // DEPRECATED: Use sendCombinedConfiguration instead
-    void sendCombinedConfiguration(unsigned char* electrodeData, int electrodeDataSize, 
-                                   double amplitude, double carrierFreq, double burstFreq);  // NEW: Send electrode + signal params together
+    void sendCombinedConfiguration(unsigned char* electrodeData, int electrodeDataSize,
+                                   double amplitude, double carrierFreq, double burstFreq,
+                                   double rampUpRate, double coastDuration, double rampDownRate);  // NEW: Send electrode + signal params together
 
 private:
     explicit SpiHandler(QObject *parent = nullptr);
@@ -32,5 +34,5 @@ private:
     SpiHandler& operator=(const SpiHandler&) = delete;
 
     int spiHandle = -1;
-    const int BUFFER_SIZE = 12; // 3 floats × 4 bytes = 12 bytes
+    const int BUFFER_SIZE = 24; // 6 floats × 4 bytes = 24 bytes
 };
