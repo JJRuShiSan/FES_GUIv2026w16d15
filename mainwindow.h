@@ -39,66 +39,50 @@ signals:
     void amplitudeChanged(double newAmplitude);
 
 public:
-    // Getters
     double getAmplitude() const { return amplitude; }
     double getRampUp()    const { return rampUp;    }
     double getCoast()     const { return coast;     }
     double getRampDown()  const { return rampDown;  }
 
     double getCarrierFreq() const {
-        QString carrierText = lblCarrier->text();
-        double carrierFreq = 10000.0;
-        if (carrierText.contains("kHz")) {
-            QStringList parts = carrierText.split('\n');
-            if (parts.size() > 1)
-                carrierFreq = parts[1].remove(" kHz").trimmed().toDouble() * 1000.0;
+        QString t = lblCarrier->text();
+        double f = 10000.0;
+        if (t.contains("kHz")) {
+            QStringList p = t.split('\n');
+            if (p.size() > 1) f = p[1].remove(" kHz").trimmed().toDouble() * 1000.0;
         }
-        return carrierFreq;
+        return f;
     }
 
     double getBurstFreq() const {
-        QString burstText = lblAM->text();
-        double burstFreq = 50.0;
-        if (burstText.contains("Hz")) {
-            QStringList parts = burstText.split('\n');
-            if (parts.size() > 1)
-                burstFreq = parts[1].remove(" Hz").trimmed().toDouble();
+        QString t = lblAM->text();
+        double f = 50.0;
+        if (t.contains("Hz")) {
+            QStringList p = t.split('\n');
+            if (p.size() > 1) f = p[1].remove(" Hz").trimmed().toDouble();
         }
-        return burstFreq;
+        return f;
     }
 
 private slots:
-    // --- Amplitude ---
-    void onAmpPlusClicked();
-    void onAmpMinusClicked();
-    void onAmpPlusHold();
-    void onAmpMinusHold();
+    void onAmpPlusClicked();      void onAmpMinusClicked();
+    void onAmpPlusHold();         void onAmpMinusHold();
 
-    // --- Ramp Up ---
-    void onRampUpPlusClicked();
-    void onRampUpMinusClicked();
-    void onRampUpPlusHold();
-    void onRampUpMinusHold();
+    void onRampUpPlusClicked();   void onRampUpMinusClicked();
+    void onRampUpPlusHold();      void onRampUpMinusHold();
 
-    // --- Coast ---
-    void onCoastPlusClicked();
-    void onCoastMinusClicked();
-    void onCoastPlusHold();
-    void onCoastMinusHold();
+    void onCoastPlusClicked();    void onCoastMinusClicked();
+    void onCoastPlusHold();       void onCoastMinusHold();
 
-    // --- Ramp Down ---
-    void onRampDownPlusClicked();
-    void onRampDownMinusClicked();
-    void onRampDownPlusHold();
-    void onRampDownMinusHold();
+    void onRampDownPlusClicked(); void onRampDownMinusClicked();
+    void onRampDownPlusHold();    void onRampDownMinusHold();
 
-    // --- General ---
     void stopAllHolds();
     void onElectrodeMatrixClicked();
     void onCarrierClicked();
     void onAMClicked();
 
-    // Legacy aliases (backward compatibility)
+    // Legacy backward-compat aliases
     void onPlusClicked()  { onAmpPlusClicked();  }
     void onMinusClicked() { onAmpMinusClicked(); }
     void onPlusHold()     { onAmpPlusHold();     }
@@ -108,44 +92,44 @@ private slots:
 private:
     SpiHandler *spiHandler = nullptr;
 
-    // --- Top bar ---
+    // Top bar
     QWidget *topBar     = nullptr;
     QLabel  *titleLabel = nullptr;
 
-    // --- Amplitude controls ---
+    // Amplitude
     QPushButton *ampPlusBtn       = nullptr;
     QPushButton *ampMinusBtn      = nullptr;
     QLineEdit   *amplitudeDisplay = nullptr;
 
-    // --- Ramp Up controls ---
+    // Ramp Up
     QPushButton *rampUpPlusBtn  = nullptr;
     QPushButton *rampUpMinusBtn = nullptr;
     QLineEdit   *rampUpDisplay  = nullptr;
 
-    // --- Coast controls ---
+    // Coast
     QPushButton *coastPlusBtn  = nullptr;
     QPushButton *coastMinusBtn = nullptr;
     QLineEdit   *coastDisplay  = nullptr;
 
-    // --- Ramp Down controls ---
+    // Ramp Down
     QPushButton *rampDownPlusBtn  = nullptr;
     QPushButton *rampDownMinusBtn = nullptr;
     QLineEdit   *rampDownDisplay  = nullptr;
 
-    // --- Right column ---
+    // Right column
     QPushButton    *electrodeBtn = nullptr;
-    ClickableLabel *carrierPic   = nullptr;   // used as FES signal image
-    ClickableLabel *amPic        = nullptr;   // hidden, kept for API compat
-    QLabel         *lblCarrier   = nullptr;   // hidden, kept for getCarrierFreq()
-    QLabel         *lblAM        = nullptr;   // hidden, kept for getBurstFreq()
+    ClickableLabel *carrierPic   = nullptr;
+    ClickableLabel *amPic        = nullptr;
+    QLabel         *lblCarrier   = nullptr;
+    QLabel         *lblAM        = nullptr;
 
-    // --- State values ---
-    double amplitude = 1.0;    // range: 1.0 V  .. 5.0 V
-    double rampUp    = 1.0;    // range: 0.1 V/s .. 3.0 V/s
-    double coast     = 1.0;    // range: 0.0 s  .. 10.0 s
-    double rampDown  = -1.0;   // range: -0.1 V/s .. -3.0 V/s
+    // State
+    double amplitude = 1.0;   // 1.0  – 5.0  V
+    double rampUp    = 1.0;   // 0.1  – 3.0  V/s
+    double coast     = 1.0;   // 0.0  – 10.0 s
+    double rampDown  = -1.0;  // -0.1 – -3.0 V/s
 
-    // --- Hold timers (one +/- pair per parameter) ---
+    // Hold timers
     QTimer *ampPlusHoldTimer       = nullptr;
     QTimer *ampMinusHoldTimer      = nullptr;
     QTimer *rampUpPlusHoldTimer    = nullptr;
@@ -155,7 +139,7 @@ private:
     QTimer *rampDownPlusHoldTimer  = nullptr;
     QTimer *rampDownMinusHoldTimer = nullptr;
 
-    // --- Helper methods ---
+    // Helpers
     QPushButton* makeRedBtn(const QString &label);
     QLineEdit*   makeDisplay(const QString &initText);
     QHBoxLayout* buildParamRow(QPushButton *&minusOut, QLineEdit *&displayOut,
@@ -176,7 +160,7 @@ private:
 
     void loadImages(const QString &carrierPath, const QString &amPath);
 
-    // Legacy pointers (alias to amp buttons)
+    // Legacy
     QPushButton *plusBtn       = nullptr;
     QPushButton *minusBtn      = nullptr;
     QTimer      *plusHoldTimer  = nullptr;
