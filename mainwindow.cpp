@@ -228,7 +228,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(amPic,        &ClickableLabel::clicked, this, &MainWindow::onAMClicked);
 
     // Load default images
-    loadImages("FEScompleteSignal.png", "");
+    loadImages("C:/Users/Admin/Desktop/School/Thesis/Projects/Codes/RPi Master/FES_GUIv2026w16d15/resources/FEScompleteSignal.png", "");
     updateAmplitudeDisplay();
     updateRampUpDisplay();
     updateCoastDisplay();
