@@ -46,7 +46,7 @@ QLineEdit* MainWindow::makeDisplay(const QString &initText) {
     d->setFixedSize(130, 50);
     d->setStyleSheet(
         "QLineEdit { background: white; color: black; "
-        "border: 1px solid #bbb; border-radius:5px; "
+        "border-radius:5px; "
         "font-size:16px; font-weight:bold; }");
     return d;
 }
@@ -94,7 +94,7 @@ void MainWindow::wireHold(QPushButton *btn, QTimer *&holdTimer,
 // =============================================================
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
-      amplitude(1.0), rampUp(1.0), coast(1.0), rampDown(-1.0)
+      amplitude(1.0), rampUp(1.0), coast(1.0), rampDown(1.0)
 {
     setWindowTitle("FES_2025");
     this->setCursor(Qt::BlankCursor);
@@ -128,7 +128,7 @@ MainWindow::MainWindow(QWidget *parent)
     content->setStyleSheet("background-color: white;");
     QHBoxLayout *contentLayout = new QHBoxLayout(content);
     contentLayout->setContentsMargins(24, 10, 24, 10);
-    contentLayout->setSpacing(0);
+    contentLayout->setSpacing(10);
 
     // ── LEFT COLUMN  ──────────────────────────────────────────────────────
     // Uses a QGridLayout so labels and control rows are pixel-aligned
@@ -181,7 +181,7 @@ MainWindow::MainWindow(QWidget *parent)
     addRow("Set Coast Duration",
            coastMinusBtn, coastDisplay, coastPlusBtn, "1.00 s");
     addRow("Set Ramp Down Rate",
-           rampDownMinusBtn, rampDownDisplay, rampDownPlusBtn, "-1.00 V/s");
+           rampDownMinusBtn, rampDownDisplay, rampDownPlusBtn, "1.00 V/s");
 
     // Wrap grid in a VBox so it stays top-aligned inside the left column
     QVBoxLayout *leftWrapper = new QVBoxLayout;
@@ -313,7 +313,7 @@ void MainWindow::updateRampDownDisplay() { rampDownDisplay->setText(QString::num
 double MainWindow::clampAmplitude(double v) { return std::round(std::max(1.0, std::min(5.0,  v))*10.0)/10.0; }
 double MainWindow::clampRampUp(double v)    { return std::round(std::max(0.1, std::min(3.0,  v))*10.0)/10.0; }
 double MainWindow::clampCoast(double v)     { return std::round(std::max(0.0, std::min(10.0, v))*10.0)/10.0; }
-double MainWindow::clampRampDown(double v)  { return std::round(std::max(-3.0,std::min(-0.1, v))*10.0)/10.0; }
+double MainWindow::clampRampDown(double v) { return std::round(std::max(0.1, std::min(3.0, v))*10.0)/10.0; }
 
 // =============================================================
 // AMPLITUDE
