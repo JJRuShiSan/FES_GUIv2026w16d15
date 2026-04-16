@@ -23,69 +23,78 @@ void ClickableLabel::mousePressEvent(QMouseEvent *event) {
 }
 
 // =============================================================
-// Helpers: factory methods
+// Factory: red square button (36x36, fits 800x480)
 // =============================================================
 QPushButton* MainWindow::makeRedBtn(const QString &label) {
     auto *btn = new QPushButton(label);
-    btn->setFixedSize(60, 60);
+    btn->setFixedSize(36, 36);
     btn->setStyleSheet(
         "QPushButton { background: rgb(214,61,61); color: white; "
-        "border-radius:6px; font-size:28px; }"
+        "border-radius:5px; font-size:18px; font-weight:bold; }"
         "QPushButton:pressed { background: rgb(180,40,40); }");
     return btn;
 }
 
+// =============================================================
+// Factory: read-only value display (120x36, fits 800x480)
+// =============================================================
 QLineEdit* MainWindow::makeDisplay(const QString &initText) {
     auto *d = new QLineEdit(initText);
     d->setAlignment(Qt::AlignCenter);
     d->setReadOnly(true);
-    d->setFixedSize(160, 60);
+    d->setFixedSize(120, 36);
     d->setStyleSheet(
         "QLineEdit { background: white; color: black; "
-        "border-radius:6px; font-size:22px; font-weight:bold; }");
+        "border: 1px solid #ccc; border-radius:4px; "
+        "font-size:13px; font-weight:bold; }");
     return d;
 }
 
+// =============================================================
+// Factory: [−] [display] [+] row
+// =============================================================
 QHBoxLayout* MainWindow::buildParamRow(QPushButton *&minusOut,
                                        QLineEdit   *&displayOut,
                                        QPushButton *&plusOut,
                                        const QString &initText)
 {
     auto *row = new QHBoxLayout;
-    row->addStretch();
-    minusOut   = makeRedBtn("-");      row->addWidget(minusOut);
-    row->addSpacing(20);
-    displayOut = makeDisplay(initText); row->addWidget(displayOut);
-    row->addSpacing(20);
-    plusOut    = makeRedBtn("+");      row->addWidget(plusOut);
+    row->setSpacing(8);
+    row->setContentsMargins(0, 0, 0, 0);
+    minusOut   = makeRedBtn("-");        row->addWidget(minusOut);
+    displayOut = makeDisplay(initText);  row->addWidget(displayOut);
+    plusOut    = makeRedBtn("+");        row->addWidget(plusOut);
     row->addStretch();
     return row;
 }
 
+// =============================================================
+// Wire a button to a hold timer + click slot
+// =============================================================
 void MainWindow::wireHold(QPushButton *btn, QTimer *&holdTimer,
                           void (MainWindow::*holdSlot)(),
                           void (MainWindow::*clickSlot)())
 {
     holdTimer = new QTimer(this);
     holdTimer->setInterval(100);
-    connect(holdTimer, &QTimer::timeout, this, holdSlot);
-    connect(btn, &QPushButton::clicked,  this, clickSlot);
-    connect(btn, &QPushButton::pressed,  holdTimer, QOverload<>::of(&QTimer::start));
-    connect(btn, &QPushButton::released, this, &MainWindow::stopAllHolds);
+    connect(holdTimer, &QTimer::timeout,    this, holdSlot);
+    connect(btn, &QPushButton::clicked,     this, clickSlot);
+    connect(btn, &QPushButton::pressed,     holdTimer, QOverload<>::of(&QTimer::start));
+    connect(btn, &QPushButton::released,    this, &MainWindow::stopAllHolds);
 }
 
 // =============================================================
-// MainWindow constructor
+// Constructor
 // =============================================================
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
-    amplitude(1.0), rampUp(1.0), coast(1.0), rampDown(-1.0)
+      amplitude(1.0), rampUp(1.0), coast(1.0), rampDown(-1.0)
 {
     setWindowTitle("FES_2025");
     this->setCursor(Qt::BlankCursor);
     amplitude = HistoryWindow::lastAmplitude;
 
-    // ── Central widget ──────────────────────────────────────────────────────
+    // ── Central widget ────────────────────────────────────────────────────
     QWidget *central = new QWidget(this);
     QVBoxLayout *mainLayout = new QVBoxLayout(central);
     mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -93,102 +102,104 @@ MainWindow::MainWindow(QWidget *parent)
     central->setStyleSheet("background: white; border: none;");
     setStyleSheet("QMainWindow { border: none; }");
 
-    // ── Top Bar ─────────────────────────────────────────────────────────────
+    // ── Top Bar (40 px — tight for 800x480) ──────────────────────────────
     topBar = new QWidget(central);
-    topBar->setFixedHeight(60);
+    topBar->setFixedHeight(40);
     topBar->setStyleSheet("background-color: rgb(141,25,36);");
     QHBoxLayout *topBarLayout = new QHBoxLayout(topBar);
-    topBarLayout->setContentsMargins(20, 0, 20, 0);
+    topBarLayout->setContentsMargins(12, 0, 12, 0);
     topBarLayout->addStretch();
     titleLabel = new QLabel("Stimulation Settings", topBar);
     titleLabel->setStyleSheet(
-        "color: white; font-size:20px; font-weight:600;"
-        "background: transparent; border: none; font-weight: bold;");
+        "color: white; font-size:15px; font-weight:600;"
+        "background: transparent; border: none;");
     titleLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     topBarLayout->addWidget(titleLabel);
     mainLayout->addWidget(topBar);
 
-    // ── Content Area ────────────────────────────────────────────────────────
+    // ── Content area ──────────────────────────────────────────────────────
+    // Available height = 480 - 40 (topbar) = 440 px
     QWidget *content = new QWidget(central);
     content->setStyleSheet("background-color: white;");
     QVBoxLayout *contentLayout = new QVBoxLayout(content);
-    contentLayout->setContentsMargins(40, 20, 40, 20);
-    contentLayout->addSpacing(10);
+    contentLayout->setContentsMargins(14, 8, 14, 8);
+    contentLayout->setSpacing(0);
 
-    // Middle row: LEFT params | RIGHT electrode + FES signal
     QHBoxLayout *middleRow = new QHBoxLayout;
+    middleRow->setSpacing(16);
 
-    // ── LEFT COLUMN ─────────────────────────────────────────────────────────
+    // ── LEFT COLUMN: 4 parameter controls ────────────────────────────────
     QVBoxLayout *leftCol = new QVBoxLayout;
-    leftCol->setSpacing(16);
+    leftCol->setSpacing(0);
+    leftCol->setContentsMargins(0, 0, 0, 0);
 
-    // ---- 1. Set Maximum Amplitude (1.0 V – 5.0 V) -------------------------
-    auto *ampHeading = new QLabel("Set Maximum Amplitude");
-    ampHeading->setStyleSheet("font-size:20px; font-weight:600; color:#222;");
-    leftCol->addWidget(ampHeading);
-    auto *ampRow = buildParamRow(ampMinusBtn, amplitudeDisplay, ampPlusBtn, "1.00 V");
-    leftCol->addLayout(ampRow);
-    leftCol->addSpacing(8);
+    // Lambda: add labelled +/- row
+    auto addParam = [&](QVBoxLayout *col,
+                        const QString &title,
+                        QPushButton *&minusBtn,
+                        QLineEdit   *&display,
+                        QPushButton *&plusBtn,
+                        const QString &initText)
+    {
+        auto *heading = new QLabel(title);
+        heading->setStyleSheet("font-size:12px; font-weight:700; color:#222;");
+        heading->setContentsMargins(0, 6, 0, 2);
+        col->addWidget(heading);
+        col->addLayout(buildParamRow(minusBtn, display, plusBtn, initText));
+    };
 
-    // ---- 2. Set Ramp Up Rate (0.1 – 3.0 V/s) ------------------------------
-    auto *rampUpHeading = new QLabel("Set Ramp Up Rate");
-    rampUpHeading->setStyleSheet("font-size:20px; font-weight:600; color:#222;");
-    leftCol->addWidget(rampUpHeading);
-    auto *rampUpRow = buildParamRow(rampUpMinusBtn, rampUpDisplay, rampUpPlusBtn, "1.00 V/s");
-    leftCol->addLayout(rampUpRow);
-    leftCol->addSpacing(8);
+    // 1. Amplitude   1.0 V – 5.0 V
+    addParam(leftCol, "Set Maximum Amplitude",
+             ampMinusBtn, amplitudeDisplay, ampPlusBtn, "1.00 V");
 
-    // ---- 3. Set Coast Duration (0.0 – 10.0 s) -----------------------------
-    auto *coastHeading = new QLabel("Set Coast Duration");
-    coastHeading->setStyleSheet("font-size:20px; font-weight:600; color:#222;");
-    leftCol->addWidget(coastHeading);
-    auto *coastRow = buildParamRow(coastMinusBtn, coastDisplay, coastPlusBtn, "1.00 s");
-    leftCol->addLayout(coastRow);
-    leftCol->addSpacing(8);
+    // 2. Ramp Up     0.1 – 3.0 V/s
+    addParam(leftCol, "Set Ramp Up Rate",
+             rampUpMinusBtn, rampUpDisplay, rampUpPlusBtn, "1.00 V/s");
 
-    // ---- 4. Set Ramp Down Rate (-0.1 – -3.0 V/s) --------------------------
-    auto *rampDownHeading = new QLabel("Set Ramp Down Rate");
-    rampDownHeading->setStyleSheet("font-size:20px; font-weight:600; color:#222;");
-    leftCol->addWidget(rampDownHeading);
-    auto *rampDownRow = buildParamRow(rampDownMinusBtn, rampDownDisplay, rampDownPlusBtn, "-1.00 V/s");
-    leftCol->addLayout(rampDownRow);
+    // 3. Coast       0.0 – 10.0 s
+    addParam(leftCol, "Set Coast Duration",
+             coastMinusBtn, coastDisplay, coastPlusBtn, "1.00 s");
+
+    // 4. Ramp Down   -0.1 – -3.0 V/s
+    addParam(leftCol, "Set Ramp Down Rate",
+             rampDownMinusBtn, rampDownDisplay, rampDownPlusBtn, "-1.00 V/s");
 
     leftCol->addStretch();
 
-    // ── RIGHT COLUMN ────────────────────────────────────────────────────────
+    // ── RIGHT COLUMN: Electrode Matrix + FES Signal image ─────────────────
     QVBoxLayout *rightCol = new QVBoxLayout;
-    rightCol->setSpacing(16);
+    rightCol->setSpacing(6);
+    rightCol->setContentsMargins(0, 0, 0, 0);
 
     // Electrode Matrix button
     electrodeBtn = new QPushButton("Electrode Matrix");
-    electrodeBtn->setFixedSize(300, 140);
+    electrodeBtn->setFixedSize(190, 80);
     electrodeBtn->setStyleSheet(
         "QPushButton { background: rgb(214,61,61); color: white; "
-        "border-radius:8px; font-size:32px; }"
+        "border-radius:6px; font-size:18px; font-weight:bold; }"
         "QPushButton:pressed { background: rgb(180,40,40); }");
     rightCol->addWidget(electrodeBtn, 0, Qt::AlignCenter);
-    rightCol->addSpacing(12);
 
     // FES Signal label
     auto *fesLabel = new QLabel("FES Signal");
-    fesLabel->setStyleSheet("font-size:16px; font-weight:600; color:#222;");
+    fesLabel->setStyleSheet("font-size:11px; font-weight:600; color:#222;");
     rightCol->addWidget(fesLabel, 0, Qt::AlignLeft);
 
-    // FES Signal image placeholder (ClickableLabel – same pattern as carrier/AM pics)
+    // FES Signal image placeholder (ClickableLabel)
     carrierPic = new ClickableLabel;
-    carrierPic->setFixedSize(280, 130);
+    carrierPic->setFixedSize(190, 200);
     carrierPic->setScaledContents(true);
     carrierPic->setStyleSheet(
-        "background: #f0f0f0; border:1px solid #ccc; border-radius:6px;");
+        "background: #f0f0f0; border:1px solid #ccc; border-radius:4px;");
     rightCol->addWidget(carrierPic, 0, Qt::AlignCenter);
 
-    // (amPic kept for API compatibility – hidden, zero-size)
+    // amPic kept for API compatibility (hidden, zero-size)
     amPic = new ClickableLabel;
     amPic->setFixedSize(0, 0);
     amPic->hide();
     rightCol->addWidget(amPic);
 
-    // Invisible labels kept so getCarrierFreq() / getBurstFreq() still work
+    // Hidden labels so getCarrierFreq() / getBurstFreq() still compile
     lblCarrier = new QLabel("Carrier Frequency\n10 kHz"); lblCarrier->hide();
     lblAM      = new QLabel("AM Frequency\n50 Hz");       lblAM->hide();
     rightCol->addWidget(lblCarrier);
@@ -196,38 +207,37 @@ MainWindow::MainWindow(QWidget *parent)
 
     rightCol->addStretch();
 
-    // ── Assemble middle row ─────────────────────────────────────────────────
-    middleRow->addLayout(leftCol, 2);
-    middleRow->addSpacing(40);
-    middleRow->addLayout(rightCol, 1);
+    // ── Assemble layout ───────────────────────────────────────────────────
+    middleRow->addLayout(leftCol, 3);
+    middleRow->addLayout(rightCol, 2);
 
     contentLayout->addLayout(middleRow);
     contentLayout->addStretch();
     mainLayout->addWidget(content);
     setCentralWidget(central);
 
-    // ── Wire hold timers ────────────────────────────────────────────────────
-    wireHold(ampPlusBtn,      ampPlusHoldTimer,      &MainWindow::onAmpPlusHold,      &MainWindow::onAmpPlusClicked);
-    wireHold(ampMinusBtn,     ampMinusHoldTimer,     &MainWindow::onAmpMinusHold,     &MainWindow::onAmpMinusClicked);
-    wireHold(rampUpPlusBtn,   rampUpPlusHoldTimer,   &MainWindow::onRampUpPlusHold,   &MainWindow::onRampUpPlusClicked);
-    wireHold(rampUpMinusBtn,  rampUpMinusHoldTimer,  &MainWindow::onRampUpMinusHold,  &MainWindow::onRampUpMinusClicked);
-    wireHold(coastPlusBtn,    coastPlusHoldTimer,    &MainWindow::onCoastPlusHold,    &MainWindow::onCoastPlusClicked);
-    wireHold(coastMinusBtn,   coastMinusHoldTimer,   &MainWindow::onCoastMinusHold,   &MainWindow::onCoastMinusClicked);
-    wireHold(rampDownPlusBtn, rampDownPlusHoldTimer, &MainWindow::onRampDownPlusHold, &MainWindow::onRampDownPlusClicked);
-    wireHold(rampDownMinusBtn,rampDownMinusHoldTimer,&MainWindow::onRampDownMinusHold,&MainWindow::onRampDownMinusClicked);
+    // ── Wire hold timers ──────────────────────────────────────────────────
+    wireHold(ampPlusBtn,       ampPlusHoldTimer,       &MainWindow::onAmpPlusHold,      &MainWindow::onAmpPlusClicked);
+    wireHold(ampMinusBtn,      ampMinusHoldTimer,      &MainWindow::onAmpMinusHold,     &MainWindow::onAmpMinusClicked);
+    wireHold(rampUpPlusBtn,    rampUpPlusHoldTimer,    &MainWindow::onRampUpPlusHold,   &MainWindow::onRampUpPlusClicked);
+    wireHold(rampUpMinusBtn,   rampUpMinusHoldTimer,   &MainWindow::onRampUpMinusHold,  &MainWindow::onRampUpMinusClicked);
+    wireHold(coastPlusBtn,     coastPlusHoldTimer,     &MainWindow::onCoastPlusHold,    &MainWindow::onCoastPlusClicked);
+    wireHold(coastMinusBtn,    coastMinusHoldTimer,     &MainWindow::onCoastMinusHold,   &MainWindow::onCoastMinusClicked);
+    wireHold(rampDownPlusBtn,  rampDownPlusHoldTimer,  &MainWindow::onRampDownPlusHold, &MainWindow::onRampDownPlusClicked);
+    wireHold(rampDownMinusBtn, rampDownMinusHoldTimer, &MainWindow::onRampDownMinusHold,&MainWindow::onRampDownMinusClicked);
 
-    // Legacy aliases (plusBtn / minusBtn) still point to amp buttons
+    // Legacy aliases → amplitude buttons
     plusBtn        = ampPlusBtn;
     minusBtn       = ampMinusBtn;
     plusHoldTimer  = ampPlusHoldTimer;
     minusHoldTimer = ampMinusHoldTimer;
 
-    // Electrode Matrix
-    connect(electrodeBtn, &QPushButton::clicked, this, &MainWindow::onElectrodeMatrixClicked);
-    connect(carrierPic,   &ClickableLabel::clicked, this, &MainWindow::onCarrierClicked);
-    connect(amPic,        &ClickableLabel::clicked, this, &MainWindow::onAMClicked);
+    // Navigation & image signals
+    connect(electrodeBtn, &QPushButton::clicked,     this, &MainWindow::onElectrodeMatrixClicked);
+    connect(carrierPic,   &ClickableLabel::clicked,  this, &MainWindow::onCarrierClicked);
+    connect(amPic,        &ClickableLabel::clicked,  this, &MainWindow::onAMClicked);
 
-    // Load default images
+    // Load FES signal image & initialise all displays
     loadImages("C:/Users/Admin/Desktop/School/Thesis/Projects/Codes/RPi Master/FES_GUIv2026w16d15/resources/FEScompleteSignal.png", "");
     updateAmplitudeDisplay();
     updateRampUpDisplay();
@@ -241,7 +251,7 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow() = default;
 
 // =============================================================
-// Image Handling
+// Image handling
 // =============================================================
 void MainWindow::setImagePaths(const QString &carrierPath, const QString &amPath) {
     loadImages(carrierPath, amPath);
@@ -249,15 +259,17 @@ void MainWindow::setImagePaths(const QString &carrierPath, const QString &amPath
 
 void MainWindow::loadImages(const QString &carrierPath, const QString &amPath) {
     QPixmap cpix, apix;
+
     if (!cpix.load(carrierPath)) {
-        qWarning() << "Carrier/FES image not found at" << carrierPath;
+        qWarning() << "FES image not found at" << carrierPath;
         carrierPic->clear();
     } else {
         carrierPic->setPixmap(
             cpix.scaled(carrierPic->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     }
+
     if (!apix.load(amPath)) {
-        qWarning() << "AM image not found at" << amPath;
+        // amPath may be empty intentionally — no warning needed
         amPic->clear();
     } else {
         amPic->setPixmap(
@@ -273,35 +285,25 @@ void MainWindow::updateAmplitudeDisplay() {
     emit amplitudeChanged(amplitude);
     HistoryWindow::lastAmplitude = amplitude;
 }
-void MainWindow::updateRampUpDisplay() {
-    rampUpDisplay->setText(QString::number(rampUp, 'f', 2) + " V/s");
-}
-void MainWindow::updateCoastDisplay() {
-    coastDisplay->setText(QString::number(coast, 'f', 2) + " s");
-}
-void MainWindow::updateRampDownDisplay() {
-    rampDownDisplay->setText(QString::number(rampDown, 'f', 2) + " V/s");
-}
+void MainWindow::updateRampUpDisplay()   { rampUpDisplay->setText(QString::number(rampUp,   'f', 2) + " V/s"); }
+void MainWindow::updateCoastDisplay()    { coastDisplay->setText(QString::number(coast,      'f', 2) + " s");   }
+void MainWindow::updateRampDownDisplay() { rampDownDisplay->setText(QString::number(rampDown,'f', 2) + " V/s"); }
 
 // =============================================================
 // Clamp helpers
 // =============================================================
 double MainWindow::clampAmplitude(double v) {
-    v = std::max(1.0, std::min(5.0, v));
-    return std::round(v * 10.0) / 10.0;
+    return std::round(std::max(1.0, std::min(5.0,  v)) * 10.0) / 10.0;
 }
 double MainWindow::clampRampUp(double v) {
-    v = std::max(0.1, std::min(3.0, v));
-    return std::round(v * 10.0) / 10.0;
+    return std::round(std::max(0.1, std::min(3.0,  v)) * 10.0) / 10.0;
 }
 double MainWindow::clampCoast(double v) {
-    v = std::max(0.0, std::min(10.0, v));
-    return std::round(v * 10.0) / 10.0;
+    return std::round(std::max(0.0, std::min(10.0, v)) * 10.0) / 10.0;
 }
 double MainWindow::clampRampDown(double v) {
-    // rampDown is always negative: -0.1 (closest to 0) … -3.0 (most negative)
-    v = std::max(-3.0, std::min(-0.1, v));
-    return std::round(v * 10.0) / 10.0;
+    // always negative: -0.1 (least steep) … -3.0 (steepest)
+    return std::round(std::max(-3.0, std::min(-0.1, v)) * 10.0) / 10.0;
 }
 
 // =============================================================
@@ -330,8 +332,7 @@ void MainWindow::onCoastMinusHold()    { coast = clampCoast(coast - 0.2); update
 
 // =============================================================
 // RAMP DOWN slots
-// (+ button makes value less negative, i.e. rampDown += 0.1 toward -0.1)
-// (- button makes value more negative, i.e. rampDown -= 0.1 toward -3.0)
+// (+) moves toward -0.1  |  (-) moves toward -3.0
 // =============================================================
 void MainWindow::onRampDownPlusClicked()  { rampDown = clampRampDown(rampDown + 0.1); updateRampDownDisplay(); }
 void MainWindow::onRampDownMinusClicked() { rampDown = clampRampDown(rampDown - 0.1); updateRampDownDisplay(); }
@@ -362,7 +363,7 @@ void MainWindow::onElectrodeMatrixClicked() {
 }
 
 // =============================================================
-// Image Clicks
+// Image clicks
 // =============================================================
 void MainWindow::onCarrierClicked() { qDebug() << "FES signal image clicked"; }
 void MainWindow::onAMClicked()      { qDebug() << "AM image clicked"; }
