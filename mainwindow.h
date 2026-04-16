@@ -65,15 +65,16 @@ public:
     }
 
 private slots:
+    // Amplitude
     void onAmpPlusClicked();      void onAmpMinusClicked();
     void onAmpPlusHold();         void onAmpMinusHold();
-
+    // Ramp Up
     void onRampUpPlusClicked();   void onRampUpMinusClicked();
     void onRampUpPlusHold();      void onRampUpMinusHold();
-
+    // Coast
     void onCoastPlusClicked();    void onCoastMinusClicked();
     void onCoastPlusHold();       void onCoastMinusHold();
-
+    // Ramp Down
     void onRampDownPlusClicked(); void onRampDownMinusClicked();
     void onRampDownPlusHold();    void onRampDownMinusHold();
 
@@ -118,18 +119,18 @@ private:
 
     // Right column
     QPushButton    *electrodeBtn = nullptr;
-    ClickableLabel *carrierPic   = nullptr;
-    ClickableLabel *amPic        = nullptr;
-    QLabel         *lblCarrier   = nullptr;
-    QLabel         *lblAM        = nullptr;
+    ClickableLabel *carrierPic   = nullptr;   // FES signal image
+    ClickableLabel *amPic        = nullptr;   // hidden, API compat
+    QLabel         *lblCarrier   = nullptr;   // hidden, getCarrierFreq()
+    QLabel         *lblAM        = nullptr;   // hidden, getBurstFreq()
 
     // State
-    double amplitude = 1.0;   // 1.0  – 5.0  V
-    double rampUp    = 1.0;   // 0.1  – 3.0  V/s
-    double coast     = 1.0;   // 0.0  – 10.0 s
-    double rampDown  = -1.0;  // -0.1 – -3.0 V/s
+    double amplitude = 1.0;    // 1.0  .. 5.0  V
+    double rampUp    = 1.0;    // 0.1  .. 3.0  V/s
+    double coast     = 1.0;    // 0.0  .. 10.0 s
+    double rampDown  = -1.0;   // -0.1 .. -3.0 V/s
 
-    // Hold timers
+    // Hold timers (one +/- pair per parameter)
     QTimer *ampPlusHoldTimer       = nullptr;
     QTimer *ampMinusHoldTimer      = nullptr;
     QTimer *rampUpPlusHoldTimer    = nullptr;
