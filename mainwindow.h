@@ -10,9 +10,6 @@
 
 #include "spihandler.h"
 
-// =============================================================
-// ClickableLabel
-// =============================================================
 class ClickableLabel : public QLabel {
     Q_OBJECT
 public:
@@ -23,9 +20,6 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
 };
 
-// =============================================================
-// MainWindow
-// =============================================================
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
@@ -39,41 +33,43 @@ signals:
     void amplitudeChanged(double newAmplitude);
 
 public:
-    double getAmplitude() const { return amplitude; }
-    double getRampUp()    const { return rampUp;    }
-    double getCoast()     const { return coast;     }
-    double getRampDown()  const { return rampDown;  }
+    double getAmplitude()  const { return amplitude; }
+    double getRampUp()     const { return rampUp; }
+    double getCoast()      const { return coast; }
+    double getRampDown()   const { return rampDown; }
 
     double getCarrierFreq() const {
-        QString t = lblCarrier->text();
-        double f = 10000.0;
-        if (t.contains("kHz")) {
-            QStringList p = t.split('\n');
-            if (p.size() > 1) f = p[1].remove(" kHz").trimmed().toDouble() * 1000.0;
+        QString carrierText = lblCarrier->text();
+        double carrierFreq = 10000.0;
+        if (carrierText.contains("kHz")) {
+            QStringList parts = carrierText.split('\n');
+            if (parts.size() > 1)
+                carrierFreq = parts[1].remove(" kHz").trimmed().toDouble() * 1000.0;
         }
-        return f;
+        return carrierFreq;
     }
 
     double getBurstFreq() const {
-        QString t = lblAM->text();
-        double f = 50.0;
-        if (t.contains("Hz")) {
-            QStringList p = t.split('\n');
-            if (p.size() > 1) f = p[1].remove(" Hz").trimmed().toDouble();
+        QString burstText = lblAM->text();
+        double burstFreq = 50.0;
+        if (burstText.contains("Hz")) {
+            QStringList parts = burstText.split('\n');
+            if (parts.size() > 1)
+                burstFreq = parts[1].remove(" Hz").trimmed().toDouble();
         }
-        return f;
+        return burstFreq;
     }
 
 private slots:
     // Amplitude
-    void onAmpPlusClicked();      void onAmpMinusClicked();
-    void onAmpPlusHold();         void onAmpMinusHold();
+    void onAmpPlusClicked();    void onAmpMinusClicked();
+    void onAmpPlusHold();       void onAmpMinusHold();
     // Ramp Up
-    void onRampUpPlusClicked();   void onRampUpMinusClicked();
-    void onRampUpPlusHold();      void onRampUpMinusHold();
+    void onRampUpPlusClicked(); void onRampUpMinusClicked();
+    void onRampUpPlusHold();    void onRampUpMinusHold();
     // Coast
-    void onCoastPlusClicked();    void onCoastMinusClicked();
-    void onCoastPlusHold();       void onCoastMinusHold();
+    void onCoastPlusClicked();  void onCoastMinusClicked();
+    void onCoastPlusHold();     void onCoastMinusHold();
     // Ramp Down
     void onRampDownPlusClicked(); void onRampDownMinusClicked();
     void onRampDownPlusHold();    void onRampDownMinusHold();
@@ -83,72 +79,60 @@ private slots:
     void onCarrierClicked();
     void onAMClicked();
 
-    // Legacy backward-compat aliases
-    void onPlusClicked()  { onAmpPlusClicked();  }
+    // Legacy slot aliases kept for backward compat
+    void onPlusClicked()  { onAmpPlusClicked(); }
     void onMinusClicked() { onAmpMinusClicked(); }
-    void onPlusHold()     { onAmpPlusHold();     }
-    void onMinusHold()    { onAmpMinusHold();    }
-    void stopHold()       { stopAllHolds();      }
+    void onPlusHold()     { onAmpPlusHold(); }
+    void onMinusHold()    { onAmpMinusHold(); }
+    void stopHold()       { stopAllHolds(); }
 
 private:
-    SpiHandler *spiHandler = nullptr;
+    SpiHandler *spiHandler;
 
-    // Top bar
-    QWidget *topBar     = nullptr;
+    // UI – top bar
+    QWidget *topBar    = nullptr;
     QLabel  *titleLabel = nullptr;
 
-    // Amplitude
-    QPushButton *ampPlusBtn       = nullptr;
-    QPushButton *ampMinusBtn      = nullptr;
+    // UI – Amplitude
+    QPushButton *ampPlusBtn   = nullptr;
+    QPushButton *ampMinusBtn  = nullptr;
     QLineEdit   *amplitudeDisplay = nullptr;
 
-    // Ramp Up
+    // UI – Ramp Up
     QPushButton *rampUpPlusBtn  = nullptr;
     QPushButton *rampUpMinusBtn = nullptr;
     QLineEdit   *rampUpDisplay  = nullptr;
 
-    // Coast
+    // UI – Coast
     QPushButton *coastPlusBtn  = nullptr;
     QPushButton *coastMinusBtn = nullptr;
     QLineEdit   *coastDisplay  = nullptr;
 
-    // Ramp Down
+    // UI – Ramp Down
     QPushButton *rampDownPlusBtn  = nullptr;
     QPushButton *rampDownMinusBtn = nullptr;
     QLineEdit   *rampDownDisplay  = nullptr;
 
-    // Right column
+    // UI – right column
     QPushButton    *electrodeBtn = nullptr;
-    ClickableLabel *carrierPic   = nullptr;   // FES signal image
-    ClickableLabel *amPic        = nullptr;   // hidden, API compat
-    QLabel         *lblCarrier   = nullptr;   // hidden, getCarrierFreq()
-    QLabel         *lblAM        = nullptr;   // hidden, getBurstFreq()
+    ClickableLabel *carrierPic   = nullptr;
+    ClickableLabel *amPic        = nullptr;
+    QLabel         *lblCarrier   = nullptr;
+    QLabel         *lblAM        = nullptr;
 
     // State
-    double amplitude = 1.0;    // 1.0  .. 5.0  V
-    double rampUp    = 1.0;    // 0.1  .. 3.0  V/s
-    double coast     = 1.0;    // 0.0  .. 10.0 s
-    double rampDown  = -1.0;   // -0.1 .. -3.0 V/s
+    double amplitude = 1.0;   // 1.0 V  – 5.0 V
+    double rampUp    = 1.0;   // 0.1 V/s – 3.0 V/s
+    double coast     = 1.0;   // 0.0 s   – 10.0 s
+    double rampDown  =  1.0;   // 0.1 .. 3.0 V/s  // -0.1 V/s – -3.0 V/s
 
-    // Hold timers (one +/- pair per parameter)
-    QTimer *ampPlusHoldTimer       = nullptr;
-    QTimer *ampMinusHoldTimer      = nullptr;
-    QTimer *rampUpPlusHoldTimer    = nullptr;
-    QTimer *rampUpMinusHoldTimer   = nullptr;
-    QTimer *coastPlusHoldTimer     = nullptr;
-    QTimer *coastMinusHoldTimer    = nullptr;
-    QTimer *rampDownPlusHoldTimer  = nullptr;
-    QTimer *rampDownMinusHoldTimer = nullptr;
+    // Hold timers (one pair per parameter)
+    QTimer *ampPlusHoldTimer      = nullptr;  QTimer *ampMinusHoldTimer      = nullptr;
+    QTimer *rampUpPlusHoldTimer   = nullptr;  QTimer *rampUpMinusHoldTimer   = nullptr;
+    QTimer *coastPlusHoldTimer    = nullptr;  QTimer *coastMinusHoldTimer    = nullptr;
+    QTimer *rampDownPlusHoldTimer = nullptr;  QTimer *rampDownMinusHoldTimer = nullptr;
 
     // Helpers
-    QPushButton* makeRedBtn(const QString &label);
-    QLineEdit*   makeDisplay(const QString &initText);
-    QHBoxLayout* buildParamRow(QPushButton *&minusOut, QLineEdit *&displayOut,
-                               QPushButton *&plusOut,  const QString &initText);
-    void wireHold(QPushButton *btn, QTimer *&holdTimer,
-                  void (MainWindow::*holdSlot)(),
-                  void (MainWindow::*clickSlot)());
-
     void updateAmplitudeDisplay();
     void updateRampUpDisplay();
     void updateCoastDisplay();
@@ -159,13 +143,25 @@ private:
     double clampCoast(double v);
     double clampRampDown(double v);
 
+    // Convenience: build a standard +/- row
+    QHBoxLayout* buildParamRow(QPushButton *&minusOut, QLineEdit *&displayOut,
+                               QPushButton *&plusOut,  const QString &initText);
+    // Convenience: make a standard red square button
+    QPushButton* makeRedBtn(const QString &label);
+    // Convenience: make a read-only display field
+    QLineEdit*   makeDisplay(const QString &initText);
+    // Wire a hold timer to a button
+    void wireHold(QPushButton *btn, QTimer *&holdTimer,
+                  void (MainWindow::*holdSlot)(),
+                  void (MainWindow::*clickSlot)());
+
     void loadImages(const QString &carrierPath, const QString &amPath);
 
-    // Legacy
-    QPushButton *plusBtn       = nullptr;
-    QPushButton *minusBtn      = nullptr;
-    QTimer      *plusHoldTimer  = nullptr;
-    QTimer      *minusHoldTimer = nullptr;
+    // kept for legacy
+    QPushButton *plusBtn  = nullptr;
+    QPushButton *minusBtn = nullptr;
+    QTimer *plusHoldTimer  = nullptr;
+    QTimer *minusHoldTimer = nullptr;
 };
 
 #endif // MAINWINDOW_H
