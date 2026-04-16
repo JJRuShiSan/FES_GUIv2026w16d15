@@ -10,6 +10,7 @@ QMap<int,int> savedClickState;
 
 #include <QFont>
 #include <QMessageBox>
+#include <QApplication>
 #include <pigpio.h>
 
 extern double g_setAmplitude;
@@ -401,15 +402,24 @@ void ElectrodeWindow::onStartClicked()
 
     MainWindow *mw = qobject_cast<MainWindow*>(parentWidget());
     if (!mw) {
-        mw = new MainWindow(); // fallback if no parent
+        const auto topWidgets = QApplication::topLevelWidgets();
+        for (QWidget *w : topWidgets) {
+            MainWindow *candidate = qobject_cast<MainWindow*>(w);
+            if (candidate) {
+                mw = candidate;
+                break;
+            }
+        }
     }
 
-    double amp = mw->getAmplitude();
-    double carrier = mw->getCarrierFreq();
-    double burst = mw->getBurstFreq();
-    double rampUp = mw->getRampUp();
-    double coast = mw->getCoast();
-    double rampDown = mw->getRampDown();
+    // Use live MainWindow values when available; otherwise keep existing amplitude/frequency globals
+    // and safe defaults for ramp/coast/ramp-down to avoid creating a default MainWindow instance.
+    double amp = (mw != nullptr) ? mw->getAmplitude() : g_setAmplitude;
+    double carrier = (mw != nullptr) ? mw->getCarrierFreq() : g_carrierFreq;
+    double burst = (mw != nullptr) ? mw->getBurstFreq() : g_burstFreq;
+    double rampUp = (mw != nullptr) ? mw->getRampUp() : 1.0;
+    double coast = (mw != nullptr) ? mw->getCoast() : 1.0;
+    double rampDown = (mw != nullptr) ? mw->getRampDown() : 1.0;
 
     g_setAmplitude = amp;
     g_carrierFreq = carrier;

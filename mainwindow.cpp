@@ -366,7 +366,7 @@ void MainWindow::stopAllHolds() {
 // =============================================================
 void MainWindow::onElectrodeMatrixClicked() {
     this->hide();
-    ElectrodeWindow *ew = new ElectrodeWindow();
+    ElectrodeWindow *ew = new ElectrodeWindow(this);
     ew->showFullScreen();
 }
 
