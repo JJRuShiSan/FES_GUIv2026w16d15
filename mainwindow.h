@@ -1,6 +1,7 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include <QHBoxLayout>
 #include <QMainWindow>
 #include <QPushButton>
 #include <QLineEdit>
