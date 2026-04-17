@@ -458,7 +458,7 @@ void ElectrodeWindow::onStartClicked()
     qDebug() << "\n[SESSION] Starting session with" << selected.size() << "active electrodes";
 
     // All checks passed, start the session
-    SessionWindow *sw = new SessionWindow(nullptr);
+    SessionWindow *sw = new SessionWindow(0, nullptr);
     sw->setAttribute(Qt::WA_DeleteOnClose);
 
     emit startSessionRequested(selected);
