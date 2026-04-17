@@ -22,7 +22,7 @@ public:
     void sendEmergencyStop();
     float requestCurrentAmplitude();  // NEW: Request current amplitude from Pico
     void sendElectrodeConfiguration(unsigned char* electrodeData, int dataSize);  // DEPRECATED: Use sendCombinedConfiguration instead
-    void sendCombinedConfiguration(unsigned char* electrodeData, int electrodeDataSize,
+    bool sendCombinedConfiguration(unsigned char* electrodeData, int electrodeDataSize,
                                    double amplitude, double carrierFreq, double burstFreq,
                                    double rampUpRate, double coastDuration, double rampDownRate);  // NEW: Send electrode + signal params together
 

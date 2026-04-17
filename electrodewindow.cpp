@@ -450,8 +450,17 @@ void ElectrodeWindow::onStartClicked()
     }
 
     // Send combined electrode configuration + signal parameters in one SPI transaction
-    SpiHandler::instance()->sendCombinedConfiguration(electrodeData, 6, amp, carrier, burst,
-                                                      rampUp, coast, rampDown);
+    const bool combinedOk = SpiHandler::instance()->sendCombinedConfiguration(
+        electrodeData, 6, amp, carrier, burst, rampUp, coast, rampDown);
+
+    if (!combinedOk) {
+        qDebug() << "[COMBINED] Failed to send config to Pico. Session start aborted.";
+        QMessageBox::critical(this, "SPI Communication Error",
+                              "Failed to send combined configuration to Pico.\n\n"
+                              "Session was not started. Please press Play again.");
+        return;
+    }
+
     qDebug() << "[COMBINED] Electrode config + signal parameters sent to Pico";
     qDebug() << "  Amplitude:" << amp << "V, Carrier:" << carrier << "Hz, Burst:" << burst
              << "Hz, RampUp:" << rampUp << "V/s, Coast:" << coast << "s, RampDown:" << rampDown << "V/s";
