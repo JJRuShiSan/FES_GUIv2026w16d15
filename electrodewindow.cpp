@@ -11,6 +11,7 @@ QMap<int,int> savedClickState;
 #include <QFont>
 #include <QMessageBox>
 #include <QApplication>
+#include <cmath>
 #include <pigpio.h>
 
 extern double g_setAmplitude;
@@ -465,8 +466,19 @@ void ElectrodeWindow::onStartClicked()
     
     qDebug() << "\n[SESSION] Starting session with" << selected.size() << "active electrodes";
 
+    // Compute one-shot duration from ramp-up/coast/ramp-down parameters.
+    const double safeRampUp = (rampUp > 0.001) ? rampUp : 0.001;
+    const double safeRampDown = (rampDown > 0.001) ? rampDown : 0.001;
+    const double safeCoast = (coast >= 0.0) ? coast : 0.0;
+    const double totalSec = (amp / safeRampUp) + safeCoast + (amp / safeRampDown);
+    const int autoStopGuardMs = 250;
+    const int autoStopMs = static_cast<int>(std::ceil(totalSec * 1000.0)) + autoStopGuardMs;
+
+    qDebug() << "[SESSION] Computed one-shot duration:" << totalSec << "s (+" << autoStopGuardMs
+             << "ms guard, total " << autoStopMs << "ms)";
+
     // All checks passed, start the session
-    SessionWindow *sw = new SessionWindow(0, nullptr);
+    SessionWindow *sw = new SessionWindow(autoStopMs, nullptr);
     sw->setAttribute(Qt::WA_DeleteOnClose);
 
     emit startSessionRequested(selected);
