@@ -21,6 +21,7 @@ public:
                         double rampUpRate, double coastDuration, double rampDownRate);
     void sendEmergencyStop();
     float requestCurrentAmplitude();  // NEW: Request current amplitude from Pico
+    bool requestSignalRunning();      // NEW: Query whether one-shot signal is still active
     void sendElectrodeConfiguration(unsigned char* electrodeData, int dataSize);  // DEPRECATED: Use sendCombinedConfiguration instead
     void sendCombinedConfiguration(unsigned char* electrodeData, int electrodeDataSize,
                                    double amplitude, double carrierFreq, double burstFreq,

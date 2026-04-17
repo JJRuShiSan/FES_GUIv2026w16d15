@@ -102,12 +102,16 @@ static volatile float current_output_amplitude = 0.0f;  // Current real-time amp
 static double phase_ramp_up_end = 0.0;
 static double phase_coast_end = 0.0;
 static double phase_ramp_down_end = 1.0;
+static double signal_cycle_duration_sec = 1.0;
+static uint64_t signal_total_samples = 1;
+static volatile uint64_t signal_samples_remaining = 0;
 
 // Electrode configuration storage
 static uint8_t electrode_config[ELECTRODE_BUF_LEN] = {0};
 
 #define EMERGENCY_STOP_CMD 0xFF  // Special command byte for emergency stop
 #define AMPLITUDE_REQUEST_CMD 0xAA  // Command to request current amplitude
+#define SIGNAL_STATUS_CMD 0xAB  // Command to request one-shot running status
 #define ELECTRODE_CONFIG_CMD 0xE2  // Electrode configuration command
 #define SIGNAL_PARAMS_CMD 0xD1     // Signal parameter block command
 #define COMBINED_CONFIG_CMD 0xE3    // Electrode + signal parameter block command
@@ -492,6 +496,7 @@ void init_signalData()
         ramp_down_duration = 0.5;
         total_cycle_duration = 1.0;
     }
+    signal_cycle_duration_sec = total_cycle_duration;
 
     phase_ramp_up_end = ramp_up_duration / total_cycle_duration;
     phase_coast_end = (ramp_up_duration + coast_dur) / total_cycle_duration;
@@ -521,6 +526,11 @@ void init_signalData()
     // phase steps (dds)
     signal.F_s = signal.F_osc * 100; // 100 samples per carrier cycle
     if (signal.F_s <= 0.0) signal.F_s = 1.0;
+
+    signal_total_samples = (uint64_t)llround(signal_cycle_duration_sec * signal.F_s);
+    if (signal_total_samples == 0) {
+        signal_total_samples = 1;
+    }
 
     dds_phase_step_carrier = (uint32_t)((signal.F_osc * 4294967296.0) / signal.F_s);
     dds_phase_step_burst   = (uint32_t)((signal.F_burst * 4294967296.0) / signal.F_s);
@@ -567,6 +577,7 @@ void apply_signal_parameters_from_rx(const uint8_t *signal_rx_buf, uint32_t sys_
     dds_phase_acc = 0;
     dds_phase_acc_burst = 0;
     dds_phase_acc_fes = 0;
+    signal_samples_remaining = signal_total_samples;
 }
 
 // ====== Output Zero Level (127.5 = 0V) ======
@@ -607,6 +618,12 @@ void fillNextData(void)
 
     for (uint32_t i = 0; i < numOfSamples; i++)
     {
+        if (signal_samples_remaining == 0) {
+            signal_active = false;
+            bufferQueue[bufferIndex][i] = 128;
+            continue;
+        }
+
         // Burst gate from MSB of burst accumulator
         uint8_t A_burst = ( (acc_burst >> 31) == 0 ) ? 1u : 0u;
 
@@ -639,6 +656,8 @@ void fillNextData(void)
         acc_carrier += dds_phase_step_carrier;
         acc_burst += dds_phase_step_burst;
         acc_fes += dds_phase_step_fes;
+
+        signal_samples_remaining--;
     }
 
     dds_phase_acc = acc_carrier;
@@ -672,6 +691,7 @@ void stop_signal_generator()
     dds_phase_acc = 0;
     dds_phase_acc_burst = 0;
     dds_phase_acc_fes = 0;
+    signal_samples_remaining = 0;
     
     // Note: We keep DMA and PIO running, but fillNextData outputs zero level
     // printf("Signal generator now outputting 0V (127.5)\n");
@@ -936,6 +956,26 @@ int main()
                 while (!spi_is_writable(spi0)) tight_loop_contents();
                 spi_get_hw(spi0)->dr = 0x00;
             }
+            else if (cmd == SIGNAL_STATUS_CMD) {
+                // Read-only status response protocol:
+                // Pi sends 0xAB, then one dummy byte to read 1-byte status.
+                // Return 0x01 while one-shot is active, else 0x00.
+                sleep_us(50);
+
+                uint8_t status_byte = signal_active ? 0x01 : 0x00;
+                while (!spi_is_writable(spi0)) tight_loop_contents();
+                spi_get_hw(spi0)->dr = status_byte;
+
+                // Wait for Pi dummy clock to consume status.
+                sleep_us(300);
+                while (spi_is_readable(spi0)) {
+                    (void)spi_get_hw(spi0)->dr;
+                }
+
+                // Prime clean 0x00 for next command.
+                while (!spi_is_writable(spi0)) tight_loop_contents();
+                spi_get_hw(spi0)->dr = 0x00;
+            }
             else if (cmd == EMERGENCY_STOP_CMD) {
                 // CRITICAL: Capture final amplitude IMMEDIATELY before any processing
                 // current_output_amplitude is only updated in DMA interrupt, so grab it NOW
@@ -994,10 +1034,17 @@ int main()
             }
         }
 
-        // Auto-stop signal after 20 seconds
+        // Stop bookkeeping once one-shot playback has naturally completed.
+        if (signal_running && !signal_active) {
+            signal_running = false;
+            gpio_put(LED_PIN, 0);
+        }
+
+        // Dynamic timeout fallback based on current one-shot duration.
         if (signal_running) {
             uint32_t elapsed = to_ms_since_boot(get_absolute_time()) - signal_start_time;
-            if (elapsed >= 20000) {
+            uint32_t timeout_ms = (uint32_t)(signal_cycle_duration_sec * 1000.0 + 10.0);
+            if (elapsed >= timeout_ms) {
                 stop_signal_generator();
                 signal_running = false;
                 gpio_put(LED_PIN, 0);

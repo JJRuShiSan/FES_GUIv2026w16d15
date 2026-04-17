@@ -60,6 +60,12 @@ SessionWindow::SessionWindow(QWidget *parent)
     connect(timer, &QTimer::timeout, this, &SessionWindow::updateTimer);
     timer->start(1000);  // every 1 sec
 
+    // Poll Pico one-shot running status with a dedicated read-only SPI command.
+    // This does not alter the existing command protocol used for config/stop.
+    completionTimer = new QTimer(this);
+    connect(completionTimer, &QTimer::timeout, this, &SessionWindow::checkSignalCompletion);
+    completionTimer->start(500);
+
     // COMMENTED OUT: Continuous amplitude polling
     // Using simpler approach: capture final amplitude on emergency stop instead
     // amplitudeTimer = new QTimer(this);
@@ -101,17 +107,38 @@ void SessionWindow::requestAmplitudeData() {
 }
 
 void SessionWindow::onStopClicked() {
-    timer->stop();
-    // amplitudeTimer->stop();  // COMMENTED OUT - polling disabled
-    
-    // No need to wait for in-flight polls since continuous polling is disabled
-    // gpioDelay(5000);  // REMOVED - no longer needed
+    endSessionAndShowHistory(true);
+}
 
-    // Send emergency stop command to Pico
-    // Pico will capture and send final amplitude value
-    SpiHandler::instance()->sendEmergencyStop();
-    
-    // g_latestAmplitude is now set by sendEmergencyStop() with final value
+void SessionWindow::checkSignalCompletion() {
+    if (isTransitioning) {
+        return;
+    }
+
+    // Read-only status query (1 byte response): true while one-shot is active.
+    bool isRunning = SpiHandler::instance()->requestSignalRunning();
+    if (!isRunning) {
+        // Natural one-shot completion: mimic STOP navigation behavior without
+        // sending an additional emergency stop command.
+        endSessionAndShowHistory(false);
+    }
+}
+
+void SessionWindow::endSessionAndShowHistory(bool sendEmergencyStop)
+{
+    if (isTransitioning) {
+        return;
+    }
+    isTransitioning = true;
+
+    if (completionTimer) completionTimer->stop();
+    if (timer) timer->stop();
+    // amplitudeTimer remains disabled in current design.
+
+    if (sendEmergencyStop) {
+        // Manual STOP: enforce immediate signal stop + capture final amplitude.
+        SpiHandler::instance()->sendEmergencyStop();
+    }
 
     // Open HistoryWindow using the global elapsed time
     HistoryWindow *hw = new HistoryWindow();
