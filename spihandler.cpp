@@ -479,13 +479,13 @@ void SpiHandler::sendElectrodeConfiguration(unsigned char* electrodeData, int da
     std::cout << "=== End Electrode Configuration ===\n" << std::endl;
 }
 
-void SpiHandler::sendCombinedConfiguration(unsigned char* electrodeData, int electrodeDataSize,
+bool SpiHandler::sendCombinedConfiguration(unsigned char* electrodeData, int electrodeDataSize,
                                            double amplitude, double carrierFreq, double burstFreq,
                                            double rampUpRate, double coastDuration, double rampDownRate)
 {
     if (spiHandle < 0) {
         std::cerr << "SPI not initialized!" << std::endl;
-        return;
+        return false;
     }
 
     std::cout << "\n=== Sending Combined Configuration (Electrode + Signal Params) ===" << std::endl;
@@ -572,7 +572,7 @@ void SpiHandler::sendCombinedConfiguration(unsigned char* electrodeData, int ele
 
     if (!ackSuccess) {
         std::cerr << "[COMBINED] Failed to get ACK after " << maxRetries << " retries. Aborting." << std::endl;
-        return;
+        return false;
     }
 
     gpioDelay(300);  // Delay after ACK to let Pico prepare for data reception
@@ -587,7 +587,7 @@ void SpiHandler::sendCombinedConfiguration(unsigned char* electrodeData, int ele
         int res = spiXfer(spiHandle, &tx[0], &rx_tmp, 1);
         if (res < 0) {
             std::cerr << " | SPI transfer FAILED at byte 0" << std::endl;
-            return;
+            return false;
         }
         std::cout << " | RX: 0x" << std::hex << std::setfill('0') << std::setw(2)
                   << (int)(unsigned char)rx_tmp << std::dec << " (discard)" << std::endl;
@@ -602,7 +602,7 @@ void SpiHandler::sendCombinedConfiguration(unsigned char* electrodeData, int ele
         int res = spiXfer(spiHandle, &tx[i], &rx_echo, 1);
         if (res < 0) {
             std::cerr << " | SPI transfer FAILED at byte " << i << std::endl;
-            return;
+            return false;
         }
         std::cout << " | RX: 0x" << std::hex << std::setfill('0') << std::setw(2)
                   << (int)(unsigned char)rx_echo << std::dec;
@@ -624,7 +624,7 @@ void SpiHandler::sendCombinedConfiguration(unsigned char* electrodeData, int ele
         int res = spiXfer(spiHandle, &dummy, &final_echo, 1);
         if (res < 0) {
             std::cerr << " | SPI transfer FAILED at final dummy" << std::endl;
-            return;
+            return false;
         }
         std::cout << " | RX: 0x" << std::hex << std::setfill('0') << std::setw(2)
                   << (int)(unsigned char)final_echo << std::dec;
@@ -648,4 +648,6 @@ void SpiHandler::sendCombinedConfiguration(unsigned char* electrodeData, int ele
               << "Hz, Burst=" << burst << "Hz, RampUp=" << rampUp
               << "V/s, Coast=" << coast << "s, RampDown=" << rampDown << "V/s" << std::endl;
     std::cout << "=== End Combined Configuration ===\n" << std::endl;
+
+    return true;
 }
