@@ -364,7 +364,9 @@ float SpiHandler::requestCurrentAmplitude()
     std::cout << std::endl;
 
     return currentAmplitude;
-}void SpiHandler::sendElectrodeConfiguration(unsigned char* electrodeData, int dataSize)
+}
+
+void SpiHandler::sendElectrodeConfiguration(unsigned char* electrodeData, int dataSize)
 {
     if (spiHandle < 0) {
         std::cerr << "SPI not initialized!" << std::endl;

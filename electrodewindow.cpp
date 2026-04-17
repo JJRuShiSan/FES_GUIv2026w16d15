@@ -457,19 +457,8 @@ void ElectrodeWindow::onStartClicked()
     
     qDebug() << "\n[SESSION] Starting session with" << selected.size() << "active electrodes";
 
-    // One-shot duration: total = (amp/rampUp) + coast + (amp/rampDown)
-    const double safeRampUp = (rampUp > 0.001) ? rampUp : 0.001;
-    const double safeRampDown = (rampDown > 0.001) ? rampDown : 0.001;
-    const double safeCoast = (coast >= 0.0) ? coast : 0.0;
-    const double totalSec = (amp / safeRampUp) + safeCoast + (amp / safeRampDown);
-    const int autoStopGuardMs = 250;
-    const int autoStopMs = static_cast<int>(std::ceil(totalSec * 1000.0)) + autoStopGuardMs;
-
-    qDebug() << "[SESSION] Computed one-shot duration:" << totalSec << "s (+" << autoStopGuardMs
-             << "ms guard, total " << autoStopMs << "ms)";
-
     // All checks passed, start the session
-    SessionWindow *sw = new SessionWindow(autoStopMs, nullptr);
+    SessionWindow *sw = new SessionWindow(nullptr);
     sw->setAttribute(Qt::WA_DeleteOnClose);
 
     emit startSessionRequested(selected);
