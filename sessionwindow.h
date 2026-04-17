@@ -15,6 +15,7 @@ public:
 private slots:
     void updateTimer();
     void onStopClicked();
+    void onAutoStopTimeout();
     void requestAmplitudeData();  // NEW: Request amplitude from Pico
 
 private:

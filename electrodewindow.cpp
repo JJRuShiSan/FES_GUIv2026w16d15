@@ -464,9 +464,11 @@ void ElectrodeWindow::onStartClicked()
     const double safeRampDown = (rampDown > 0.001) ? rampDown : 0.001;
     const double safeCoast = (coast >= 0.0) ? coast : 0.0;
     const double totalSec = (amp / safeRampUp) + safeCoast + (amp / safeRampDown);
-    const int autoStopMs = static_cast<int>(std::ceil(totalSec * 1000.0));
+    const int autoStopGuardMs = 250;
+    const int autoStopMs = static_cast<int>(std::ceil(totalSec * 1000.0)) + autoStopGuardMs;
 
-    qDebug() << "[SESSION] Computed one-shot duration:" << totalSec << "s (" << autoStopMs << "ms)";
+    qDebug() << "[SESSION] Computed one-shot duration:" << totalSec << "s (+" << autoStopGuardMs
+             << "ms guard, total " << autoStopMs << "ms)";
 
     // All checks passed, start the session
     SessionWindow *sw = new SessionWindow(autoStopMs, nullptr);

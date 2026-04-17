@@ -64,7 +64,7 @@ SessionWindow::SessionWindow(int autoStopMs, QWidget *parent)
     // This avoids extra SPI polling traffic that can disturb command framing.
     autoStopTimer = new QTimer(this);
     autoStopTimer->setSingleShot(true);
-    connect(autoStopTimer, &QTimer::timeout, this, &SessionWindow::onStopClicked);
+    connect(autoStopTimer, &QTimer::timeout, this, &SessionWindow::onAutoStopTimeout);
     if (autoStopMs > 0) {
         autoStopTimer->start(autoStopMs);
         std::cout << "[SESSION] Auto STOP armed at " << autoStopMs << " ms" << std::endl;
@@ -112,6 +112,11 @@ void SessionWindow::requestAmplitudeData() {
 
 void SessionWindow::onStopClicked() {
     endSessionAndShowHistory(true);
+}
+
+void SessionWindow::onAutoStopTimeout() {
+    // One-shot completion path: do not inject another SPI emergency stop command.
+    endSessionAndShowHistory(false);
 }
 
 void SessionWindow::endSessionAndShowHistory(bool sendEmergencyStop)
