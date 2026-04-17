@@ -11,7 +11,6 @@ QMap<int,int> savedClickState;
 #include <QFont>
 #include <QMessageBox>
 #include <QApplication>
-#include <cmath>
 #include <pigpio.h>
 
 extern double g_setAmplitude;
@@ -450,37 +449,16 @@ void ElectrodeWindow::onStartClicked()
     }
 
     // Send combined electrode configuration + signal parameters in one SPI transaction
-    const bool combinedOk = SpiHandler::instance()->sendCombinedConfiguration(
-        electrodeData, 6, amp, carrier, burst, rampUp, coast, rampDown);
-
-    if (!combinedOk) {
-        qDebug() << "[COMBINED] Failed to send config to Pico. Session start aborted.";
-        QMessageBox::critical(this, "SPI Communication Error",
-                              "Failed to send combined configuration to Pico.\n\n"
-                              "Session was not started. Please press Play again.");
-        return;
-    }
-
+    SpiHandler::instance()->sendCombinedConfiguration(electrodeData, 6, amp, carrier, burst,
+                                                      rampUp, coast, rampDown);
     qDebug() << "[COMBINED] Electrode config + signal parameters sent to Pico";
     qDebug() << "  Amplitude:" << amp << "V, Carrier:" << carrier << "Hz, Burst:" << burst
              << "Hz, RampUp:" << rampUp << "V/s, Coast:" << coast << "s, RampDown:" << rampDown << "V/s";
     
     qDebug() << "\n[SESSION] Starting session with" << selected.size() << "active electrodes";
 
-    // Compute one-shot total duration from current parameters:
-    // total = (amp / rampUpRate) + coast + (amp / rampDownRate)
-    const double safeRampUp = (rampUp > 0.001) ? rampUp : 0.001;
-    const double safeRampDown = (rampDown > 0.001) ? rampDown : 0.001;
-    const double safeCoast = (coast >= 0.0) ? coast : 0.0;
-    const double totalSec = (amp / safeRampUp) + safeCoast + (amp / safeRampDown);
-    const int autoStopGuardMs = 250;
-    const int autoStopMs = static_cast<int>(std::ceil(totalSec * 1000.0)) + autoStopGuardMs;
-
-    qDebug() << "[SESSION] Computed one-shot duration:" << totalSec << "s (+" << autoStopGuardMs
-             << "ms guard, total " << autoStopMs << "ms)";
-
     // All checks passed, start the session
-    SessionWindow *sw = new SessionWindow(autoStopMs, nullptr);
+    SessionWindow *sw = new SessionWindow(nullptr);
     sw->setAttribute(Qt::WA_DeleteOnClose);
 
     emit startSessionRequested(selected);

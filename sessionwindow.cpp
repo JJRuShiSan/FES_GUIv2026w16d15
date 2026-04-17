@@ -17,7 +17,7 @@ double g_latestAmplitude = 0.0;    // Latest amplitude received from Pico
 double g_carrierFreq = 10000.0;    // Carrier frequency
 double g_burstFreq = 50.0;         // Burst frequency
 
-SessionWindow::SessionWindow(int autoStopMs, QWidget *parent)
+SessionWindow::SessionWindow(QWidget *parent)
     : QMainWindow(parent), elapsedSeconds(g_elapsedSeconds)   // resume previous time
 {
 
@@ -60,16 +60,6 @@ SessionWindow::SessionWindow(int autoStopMs, QWidget *parent)
     connect(timer, &QTimer::timeout, this, &SessionWindow::updateTimer);
     timer->start(1000);  // every 1 sec
 
-    // Auto-trigger STOP using the expected one-shot duration computed in GUI.
-    // This avoids extra SPI polling traffic that can disturb command framing.
-    autoStopTimer = new QTimer(this);
-    autoStopTimer->setSingleShot(true);
-    connect(autoStopTimer, &QTimer::timeout, this, &SessionWindow::onAutoStopTimeout);
-    if (autoStopMs > 0) {
-        autoStopTimer->start(autoStopMs);
-        std::cout << "[SESSION] Auto STOP armed at " << autoStopMs << " ms" << std::endl;
-    }
-
     // COMMENTED OUT: Continuous amplitude polling
     // Using simpler approach: capture final amplitude on emergency stop instead
     // amplitudeTimer = new QTimer(this);
@@ -111,29 +101,17 @@ void SessionWindow::requestAmplitudeData() {
 }
 
 void SessionWindow::onStopClicked() {
-    endSessionAndShowHistory(true);
-}
+    timer->stop();
+    // amplitudeTimer->stop();  // COMMENTED OUT - polling disabled
+    
+    // No need to wait for in-flight polls since continuous polling is disabled
+    // gpioDelay(5000);  // REMOVED - no longer needed
 
-void SessionWindow::onAutoStopTimeout() {
-    // One-shot completion path: do not inject another SPI emergency stop command.
-    endSessionAndShowHistory(false);
-}
-
-void SessionWindow::endSessionAndShowHistory(bool sendEmergencyStop)
-{
-    if (isTransitioning) {
-        return;
-    }
-    isTransitioning = true;
-
-    if (autoStopTimer) autoStopTimer->stop();
-    if (timer) timer->stop();
-    // amplitudeTimer remains disabled in current design.
-
-    if (sendEmergencyStop) {
-        // Manual STOP: enforce immediate signal stop + capture final amplitude.
-        SpiHandler::instance()->sendEmergencyStop();
-    }
+    // Send emergency stop command to Pico
+    // Pico will capture and send final amplitude value
+    SpiHandler::instance()->sendEmergencyStop();
+    
+    // g_latestAmplitude is now set by sendEmergencyStop() with final value
 
     // Open HistoryWindow using the global elapsed time
     HistoryWindow *hw = new HistoryWindow();
