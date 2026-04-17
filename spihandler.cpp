@@ -219,48 +219,8 @@ void SpiHandler::sendEmergencyStop()
     std::cout << "  RX: 0x" << std::hex << std::setfill('0') << std::setw(2)
               << (int)(unsigned char)rx_dummy << std::dec << std::endl;
 
-    // CRITICAL: Give Pico sufficient time to:
-    // 1. Detect emergency stop in main loop (up to 100µs worst case)
-    // 2. Execute stop_signal_generator() (~50µs)
-    // 3. Capture final amplitude and prepare 4-byte response
-    // Total worst case: ~5ms for safety margin
-    gpioDelay(5000);
-    
-    // NEW: Read final amplitude value (4 bytes) that Pico sends after stopping
-    char amp_rx[4] = {0};
-    char amp_tx[4] = {0};
-    for (int i = 0; i < 4; i++) {
-        spiXfer(spiHandle, &amp_tx[i], &amp_rx[i], 1);
-        gpioDelay(50);  // 50µs spacing
-    }
-    
-    // Decode final amplitude
-    float finalAmplitude = 0.0f;
-    std::memcpy(&finalAmplitude, amp_rx, sizeof(float));
-    
-    // Store globally for history window
-    g_latestAmplitude = finalAmplitude;
-    
-    std::cout << "  Final output amplitude: " << std::fixed << std::setprecision(1) 
-              << finalAmplitude << " V" << std::endl;
-    std::cout << "  Final amplitude bytes: 0x";
-    for (int i = 0; i < 4; i++) {
-        std::cout << std::hex << std::setfill('0') << std::setw(2)
-                  << (int)(unsigned char)amp_rx[i] << " ";
-    }
-    std::cout << std::dec << std::endl;
-    
-    // Aggressive FIFO flush: send 20 dummy bytes to completely drain any
-    // leftover data that Pico may have pre-loaded during interrupted amplitude poll
-    char dummy_tx = 0x00;
-    char dummy_rx;
-    for (int i = 0; i < 20; i++) {
-        spiXfer(spiHandle, &dummy_tx, &dummy_rx, 1);
-        gpioDelay(100);  // 100µs between each flush byte
-    }
-    
-    // Final delay to ensure Pico processes the flush
-    gpioDelay(1000);
+    // Keep emergency-stop transaction minimal to avoid adding extra SPI traffic.
+    g_latestAmplitude = 0.0;
     
     std::cout << "=== END EMERGENCY STOP ===\n" << std::endl;
 }

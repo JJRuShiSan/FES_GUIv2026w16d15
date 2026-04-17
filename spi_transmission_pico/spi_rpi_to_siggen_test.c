@@ -956,58 +956,19 @@ int main()
                 spi_get_hw(spi0)->dr = 0x00;
             }
             else if (cmd == EMERGENCY_STOP_CMD) {
-                // CRITICAL: Capture final amplitude IMMEDIATELY before any processing
-                // current_output_amplitude is only updated in DMA interrupt, so grab it NOW
-                float final_amplitude = current_output_amplitude;
-                
                 // Stop signal generation
                 stop_signal_generator();
                 signal_running = false;
                 gpio_put(LED_PIN, 0);
                 
-                // Small delay to let Pi finish sending 0xFF command
+                // Command-only emergency stop: no amplitude response bytes.
                 sleep_us(100);
                 
-                // Flush any leftover RX bytes from command phase
+                // Flush any leftover RX bytes and prime clean idle byte for next command.
                 while (spi_is_readable(spi0)) {
                     (void)spi_get_hw(spi0)->dr;
                 }
-                
-                // CRITICAL: Wait for RPi's 5ms delay to elapse BEFORE priming bytes
-                // This ensures RPi won't start reading before we're ready
-                // Subtract the 100µs we already waited
-                sleep_us(4400);
-                
-                // Send final amplitude value to RPi (4 bytes)
-                // RPi will read this after emergency stop to display final output voltage
-                uint8_t amp_buf[4];
-                memcpy(amp_buf, &final_amplitude, sizeof(float));
-                
-                // Prime all 4 amplitude bytes into TX FIFO quickly
-                for (int i = 0; i < 4; i++) {
-                    while (!spi_is_writable(spi0)) tight_loop_contents();
-                    spi_get_hw(spi0)->dr = amp_buf[i];
-                }
-                
-                // Wait for RPi to read the 4 amplitude bytes
-                // RPi does 4 transfers with 50µs spacing = ~300µs total
-                sleep_us(500);
-                
-                // NOW drain RPi's 4 dummy TX bytes from the amplitude read
-                while (spi_is_readable(spi0)) {
-                    (void)spi_get_hw(spi0)->dr;
-                }
-                
-                // RPi will now send 20 dummy flush bytes
-                // Wait for those to arrive: 20 bytes × 100µs spacing = ~2ms
-                sleep_us(2500);
-                
-                // Flush the 20 dummy bytes
-                while (spi_is_readable(spi0)) {
-                    (void)spi_get_hw(spi0)->dr;
-                }
-                
-                // Prime clean 0x00 for next command
+
                 while (!spi_is_writable(spi0)) tight_loop_contents();
                 spi_get_hw(spi0)->dr = 0x00;
             }

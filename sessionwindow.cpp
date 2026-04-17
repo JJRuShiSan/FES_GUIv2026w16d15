@@ -59,7 +59,7 @@ SessionWindow::SessionWindow(int autoStopMs, QWidget *parent)
         std::cout << "[SESSION] Auto STOP armed at " << autoStopMs << " ms" << std::endl;
     }
 
-    std::cout << "[SESSION] Final amplitude will be captured on emergency stop" << std::endl;
+    std::cout << "[SESSION] Emergency stop uses low-traffic mode (no amplitude readback)" << std::endl;
 }
 
 void SessionWindow::updateTimer()
