@@ -17,8 +17,8 @@ double g_latestAmplitude = 0.0;    // Latest amplitude received from Pico
 double g_carrierFreq = 10000.0;    // Carrier frequency
 double g_burstFreq = 50.0;         // Burst frequency
 
-SessionWindow::SessionWindow(QWidget *parent)
-    : QMainWindow(parent), elapsedSeconds(g_elapsedSeconds)   // resume previous time
+SessionWindow::SessionWindow(int autoStopMs, QWidget *parent)
+    : QMainWindow(parent), elapsedSeconds(g_elapsedSeconds), autoStopTimer(nullptr)   // resume previous time
 {
 
     setWindowTitle("FES_2025");
@@ -59,6 +59,15 @@ SessionWindow::SessionWindow(QWidget *parent)
     timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &SessionWindow::updateTimer);
     timer->start(1000);  // every 1 sec
+
+    // Optional GUI-only stopper timer for one-shot completion testing.
+    autoStopTimer = new QTimer(this);
+    autoStopTimer->setSingleShot(true);
+    connect(autoStopTimer, &QTimer::timeout, this, &SessionWindow::onAutoStopTimeout);
+    if (autoStopMs > 0) {
+        autoStopTimer->start(autoStopMs);
+        std::cout << "[SESSION] Auto STOP armed at " << autoStopMs << " ms" << std::endl;
+    }
 
     // COMMENTED OUT: Continuous amplitude polling
     // Using simpler approach: capture final amplitude on emergency stop instead
@@ -102,6 +111,7 @@ void SessionWindow::requestAmplitudeData() {
 
 void SessionWindow::onStopClicked() {
     timer->stop();
+    if (autoStopTimer) autoStopTimer->stop();
     // amplitudeTimer->stop();  // COMMENTED OUT - polling disabled
     
     // No need to wait for in-flight polls since continuous polling is disabled
@@ -114,6 +124,17 @@ void SessionWindow::onStopClicked() {
     // g_latestAmplitude is now set by sendEmergencyStop() with final value
 
     // Open HistoryWindow using the global elapsed time
+    showHistoryWindow();
+}
+
+void SessionWindow::onAutoStopTimeout() {
+    // Test-isolation path: do not send SPI emergency stop on auto one-shot completion.
+    timer->stop();
+    showHistoryWindow();
+}
+
+void SessionWindow::showHistoryWindow()
+{
     HistoryWindow *hw = new HistoryWindow();
     hw->setAttribute(Qt::WA_DeleteOnClose);
     hw->showFullScreen();
