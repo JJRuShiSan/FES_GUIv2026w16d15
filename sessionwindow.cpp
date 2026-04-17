@@ -17,7 +17,7 @@ double g_latestAmplitude = 0.0;    // Latest amplitude received from Pico
 double g_carrierFreq = 10000.0;    // Carrier frequency
 double g_burstFreq = 50.0;         // Burst frequency
 
-SessionWindow::SessionWindow(QWidget *parent)
+SessionWindow::SessionWindow(int autoStopMs, QWidget *parent)
     : QMainWindow(parent), elapsedSeconds(g_elapsedSeconds)   // resume previous time
 {
 
@@ -60,11 +60,15 @@ SessionWindow::SessionWindow(QWidget *parent)
     connect(timer, &QTimer::timeout, this, &SessionWindow::updateTimer);
     timer->start(1000);  // every 1 sec
 
-    // Poll Pico one-shot running status with a dedicated read-only SPI command.
-    // This does not alter the existing command protocol used for config/stop.
-    completionTimer = new QTimer(this);
-    connect(completionTimer, &QTimer::timeout, this, &SessionWindow::checkSignalCompletion);
-    completionTimer->start(500);
+    // Auto-trigger STOP using the expected one-shot duration computed in GUI.
+    // This avoids extra SPI polling traffic that can disturb command framing.
+    autoStopTimer = new QTimer(this);
+    autoStopTimer->setSingleShot(true);
+    connect(autoStopTimer, &QTimer::timeout, this, &SessionWindow::onStopClicked);
+    if (autoStopMs > 0) {
+        autoStopTimer->start(autoStopMs);
+        std::cout << "[SESSION] Auto STOP armed at " << autoStopMs << " ms" << std::endl;
+    }
 
     // COMMENTED OUT: Continuous amplitude polling
     // Using simpler approach: capture final amplitude on emergency stop instead
@@ -110,20 +114,6 @@ void SessionWindow::onStopClicked() {
     endSessionAndShowHistory(true);
 }
 
-void SessionWindow::checkSignalCompletion() {
-    if (isTransitioning) {
-        return;
-    }
-
-    // Read-only status query (1 byte response): true while one-shot is active.
-    bool isRunning = SpiHandler::instance()->requestSignalRunning();
-    if (!isRunning) {
-        // Natural one-shot completion: mimic STOP navigation behavior without
-        // sending an additional emergency stop command.
-        endSessionAndShowHistory(false);
-    }
-}
-
 void SessionWindow::endSessionAndShowHistory(bool sendEmergencyStop)
 {
     if (isTransitioning) {
@@ -131,7 +121,7 @@ void SessionWindow::endSessionAndShowHistory(bool sendEmergencyStop)
     }
     isTransitioning = true;
 
-    if (completionTimer) completionTimer->stop();
+    if (autoStopTimer) autoStopTimer->stop();
     if (timer) timer->stop();
     // amplitudeTimer remains disabled in current design.
 

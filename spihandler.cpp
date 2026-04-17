@@ -9,7 +9,6 @@
 
 #define SIGNAL_PARAMS_CMD 0xD1  // Command to announce parameter block
 #define AMPLITUDE_REQUEST_CMD 0xAA  // Command to request amplitude
-#define SIGNAL_STATUS_CMD 0xAB      // Command to request signal running status
 #define EMERGENCY_STOP_CMD 0xFF     // Emergency stop command
 #define GPIO_INIT_CMD 0xC3          // GPIO expander initialization command
 #define COMBINED_CONFIG_CMD 0xE3    // Combined electrode config + signal params command
@@ -365,38 +364,6 @@ float SpiHandler::requestCurrentAmplitude()
     std::cout << std::endl;
 
     return currentAmplitude;
-}
-
-bool SpiHandler::requestSignalRunning()
-{
-    if (spiHandle < 0) {
-        std::cerr << "SPI not initialized!" << std::endl;
-        return false;
-    }
-
-    // Read-only status request protocol:
-    // 1) Send 0xAB command
-    // 2) Wait briefly for Pico to preload one status byte
-    // 3) Send one dummy byte and receive status (1=running, 0=finished)
-    char tx_cmd = SIGNAL_STATUS_CMD;
-    char rx_discard = 0x00;
-    if (spiXfer(spiHandle, &tx_cmd, &rx_discard, 1) < 0) {
-        std::cerr << "[STATUS] Failed to send status command" << std::endl;
-        return false;
-    }
-
-    gpioDelay(300);
-
-    char dummy = 0x00;
-    char status_byte = 0x00;
-    if (spiXfer(spiHandle, &dummy, &status_byte, 1) < 0) {
-        std::cerr << "[STATUS] Failed to read status byte" << std::endl;
-        return false;
-    }
-
-    gpioDelay(100);
-
-    return (status_byte != 0);
 }
 
 void SpiHandler::sendElectrodeConfiguration(unsigned char* electrodeData, int dataSize)

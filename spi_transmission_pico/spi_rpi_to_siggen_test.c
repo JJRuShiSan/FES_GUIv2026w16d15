@@ -111,7 +111,6 @@ static uint8_t electrode_config[ELECTRODE_BUF_LEN] = {0};
 
 #define EMERGENCY_STOP_CMD 0xFF  // Special command byte for emergency stop
 #define AMPLITUDE_REQUEST_CMD 0xAA  // Command to request current amplitude
-#define SIGNAL_STATUS_CMD 0xAB  // Command to request one-shot running status
 #define ELECTRODE_CONFIG_CMD 0xE2  // Electrode configuration command
 #define SIGNAL_PARAMS_CMD 0xD1     // Signal parameter block command
 #define COMBINED_CONFIG_CMD 0xE3    // Electrode + signal parameter block command
@@ -953,26 +952,6 @@ int main()
                 }
                 
                 // Prime clean 0x00 for next command
-                while (!spi_is_writable(spi0)) tight_loop_contents();
-                spi_get_hw(spi0)->dr = 0x00;
-            }
-            else if (cmd == SIGNAL_STATUS_CMD) {
-                // Read-only status response protocol:
-                // Pi sends 0xAB, then one dummy byte to read 1-byte status.
-                // Return 0x01 while one-shot is active, else 0x00.
-                sleep_us(50);
-
-                uint8_t status_byte = signal_active ? 0x01 : 0x00;
-                while (!spi_is_writable(spi0)) tight_loop_contents();
-                spi_get_hw(spi0)->dr = status_byte;
-
-                // Wait for Pi dummy clock to consume status.
-                sleep_us(300);
-                while (spi_is_readable(spi0)) {
-                    (void)spi_get_hw(spi0)->dr;
-                }
-
-                // Prime clean 0x00 for next command.
                 while (!spi_is_writable(spi0)) tight_loop_contents();
                 spi_get_hw(spi0)->dr = 0x00;
             }
