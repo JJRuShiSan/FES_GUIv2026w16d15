@@ -9,8 +9,10 @@
 #include "hardware/pio.h"
 
 // ====== SPI Configuration ======
-#define BUF_LEN 12          // 12 bytes for 3 floats (amplitude, carrier freq, burst freq)
+#define SIGNAL_PARAM_FLOAT_COUNT 6 // amp, carrier, burst, ramp-up, coast, ramp-down
+#define BUF_LEN (SIGNAL_PARAM_FLOAT_COUNT * 4)
 #define ELECTRODE_BUF_LEN 6 // 6 bytes for electrode matrix configuration
+#define COMBINED_BUF_LEN (ELECTRODE_BUF_LEN + BUF_LEN)
 #define LED_PIN 25          // Onboard LED
 
 // SPI0 Pins (Slave - receives from RPi)
@@ -39,8 +41,8 @@ static uint8_t qsin_lut[QUARTER_LUT];
 static uint8_t burst_lut[BURST_LUT];
 
 // FES envelope LUT (precomputed)
-#define FES_LUT 1024
-#define FES_BITS 10
+#define FES_LUT 4096
+#define FES_BITS 12
 static uint16_t fes_lut[FES_LUT];   // values 0..256 (8.8 fixed-point scale; 256 == 1.0)
 
 // phase accumulators and steps (DDS)
@@ -88,10 +90,21 @@ SIGNAL signal;
 static volatile float fes_amp = 0.0f;
 static volatile float carrier_freq = 0.0f;
 static volatile float burst_freq = 0.0f;
+static volatile float ramp_up_rate_v_per_sec = 1.0f;
+static volatile float coast_duration_sec = 1.0f;
+static volatile float ramp_down_rate_v_per_sec = 1.0f;
 static volatile bool parameters_received = false;
 static volatile bool signal_active = false;
 static volatile bool emergency_stop_requested = false;
 static volatile float current_output_amplitude = 0.0f;  // Current real-time amplitude (-5 to +5 V)
+
+// Envelope timing derived from received signal parameters
+static double phase_ramp_up_end = 0.0;
+static double phase_coast_end = 0.0;
+static double phase_ramp_down_end = 1.0;
+static double signal_cycle_duration_sec = 1.0;
+static uint64_t signal_total_samples = 1;
+static volatile uint64_t signal_samples_remaining = 0;
 
 // Electrode configuration storage
 static uint8_t electrode_config[ELECTRODE_BUF_LEN] = {0};
@@ -100,6 +113,7 @@ static uint8_t electrode_config[ELECTRODE_BUF_LEN] = {0};
 #define AMPLITUDE_REQUEST_CMD 0xAA  // Command to request current amplitude
 #define ELECTRODE_CONFIG_CMD 0xE2  // Electrode configuration command
 #define SIGNAL_PARAMS_CMD 0xD1     // Signal parameter block command
+#define COMBINED_CONFIG_CMD 0xE3    // Electrode + signal parameter block command
 // GPIO_INIT_CMD removed - GPIO expanders now initialized automatically at startup
 
 // ====== Function Prototypes ======
@@ -116,6 +130,7 @@ void fillNextData();
 void output_zero_level();
 void stop_signal_generator();
 double fesEnvelope(double fesIndex);
+void apply_signal_parameters_from_rx(const uint8_t *signal_rx_buf, uint32_t sys_clock);
 
 static inline void spi_slave_write_byte(uint8_t value)
 {
@@ -302,30 +317,39 @@ static void receive_electrode_configuration_block(void)
     gpio_put(LED_PIN, !gpio_get(LED_PIN));
 }
 
-static void receive_signal_parameter_block(uint8_t *rx_buf)
+static void receive_echo_payload_block(uint8_t *rx_buf, int payload_len)
 {
-    // Pi uses echo-style: first transfer discards RX, then i=1..11 capture echoes, final dummy gets last byte.
-    // But Pico needs to read 12 data bytes sequentially. The ACK helper already consumed the Pi's
-    // acknowledgement dummy, so the next 12 reads will be: tx[0], tx[1], ..., tx[11].
+    // Pi uses echo-style: first transfer discards RX, then i=1..N-1 capture echoes, final dummy gets last byte.
+    // The ACK helper already consumed the Pi's acknowledgement dummy, so the next reads are payload bytes.
     // We prime each echo immediately after reading.
-    
+
     // Read byte 0, prime its echo (Pi will discard this RX anyway)
     uint8_t byte0 = spi_slave_read_byte();
     rx_buf[0] = byte0;
     spi_slave_write_byte(byte0);
 
-    // Read bytes 1–11, prime echoes for next transfer
-    for (int i = 1; i < BUF_LEN; ++i) {
+    // Read bytes 1..N-1, prime echoes for next transfer
+    for (int i = 1; i < payload_len; ++i) {
         uint8_t byte = spi_slave_read_byte();
         rx_buf[i] = byte;
         spi_slave_write_byte(byte);
     }
 
-    // Pi will send one final dummy to read the echo of byte 11; consume it
+    // Pi will send one final dummy to read the echo of the last payload byte; consume it.
     (void)spi_slave_read_byte();
 
     // Prime a zero so the next command sees a clean placeholder
     spi_slave_write_byte(0x00);
+}
+
+static void receive_signal_parameter_block(uint8_t *rx_buf)
+{
+    receive_echo_payload_block(rx_buf, BUF_LEN);
+}
+
+static void receive_combined_configuration_block(uint8_t *rx_buf)
+{
+    receive_echo_payload_block(rx_buf, COMBINED_BUF_LEN);
 }
 
 // ====== DMA Functions ======
@@ -450,23 +474,50 @@ void init_signalData()
         burst_lut[i] = (i < (BURST_LUT / 2)) ? 1 : 0;    
     }
 
-    // FES Envelope - using fes_amp normalized (divided by 5)
-    double fes_amp_normalized = fes_amp / 5.0;
+    // FES envelope with configurable ramp-up/coast/ramp-down durations (no zero phase).
+    const double max_dac_voltage = 5.0;
+    double amp_v = fes_amp;
+    if (amp_v < 0.0) amp_v = 0.0;
+    if (amp_v > max_dac_voltage) amp_v = max_dac_voltage;
+    double amplitude_scale = amp_v / max_dac_voltage;
+
+    double ramp_up_rate = (ramp_up_rate_v_per_sec > 0.001f) ? ramp_up_rate_v_per_sec : 0.001;
+    double ramp_down_rate = (ramp_down_rate_v_per_sec > 0.001f) ? ramp_down_rate_v_per_sec : 0.001;
+    double coast_dur = (coast_duration_sec >= 0.0f) ? coast_duration_sec : 0.0;
+
+    double ramp_up_duration = amp_v / ramp_up_rate;
+    double ramp_down_duration = amp_v / ramp_down_rate;
+    double total_cycle_duration = ramp_up_duration + coast_dur + ramp_down_duration;
+    if (total_cycle_duration <= 1e-6) {
+        // Fallback keeps a valid envelope if all inputs are near zero.
+        ramp_up_duration = 0.5;
+        coast_dur = 0.0;
+        ramp_down_duration = 0.5;
+        total_cycle_duration = 1.0;
+    }
+    signal_cycle_duration_sec = total_cycle_duration;
+
+    phase_ramp_up_end = ramp_up_duration / total_cycle_duration;
+    phase_coast_end = (ramp_up_duration + coast_dur) / total_cycle_duration;
+    phase_ramp_down_end = 1.0;
+
     for (unsigned int i = 0; i < FES_LUT; i++) {
         double phase = (double)i / (double)FES_LUT;
         double env;
 
-        double p = 0.25;
-        if (phase < p)
-            env = phase / p;
-        else if (phase < 2*p)
-            env = 1.0;
-        else if (phase < 3*p)
-            env = 1.0 - ((phase - 2*p) / p);
-        else
+        if (phase < phase_ramp_up_end && phase_ramp_up_end > 1e-9) {
+            double local_phase = phase / phase_ramp_up_end;
+            env = local_phase * amplitude_scale;
+        } else if (phase < phase_coast_end) {
+            env = amplitude_scale;
+        } else if (phase < phase_ramp_down_end && (phase_ramp_down_end - phase_coast_end) > 1e-9) {
+            double local_phase = (phase - phase_coast_end) / (phase_ramp_down_end - phase_coast_end);
+            env = amplitude_scale * (1.0 - local_phase);
+        } else {
             env = 0.0;
+        }
             
-        int v = (int)lround((env * 256.0) * fes_amp_normalized);
+        int v = (int)lround(env * 256.0);
         if (v < 0) v = 0; if (v > 256) v = 256;
         fes_lut[i] = (uint16_t)v;
     }
@@ -475,11 +526,57 @@ void init_signalData()
     signal.F_s = signal.F_osc * 100; // 100 samples per carrier cycle
     if (signal.F_s <= 0.0) signal.F_s = 1.0;
 
+    signal_total_samples = (uint64_t)llround(signal_cycle_duration_sec * signal.F_s);
+    if (signal_total_samples == 0) {
+        signal_total_samples = 1;
+    }
+
     dds_phase_step_carrier = (uint32_t)((signal.F_osc * 4294967296.0) / signal.F_s);
     dds_phase_step_burst   = (uint32_t)((signal.F_burst * 4294967296.0) / signal.F_s);
 
-    double F_fes = 0.05;
+    double F_fes = 1.0 / total_cycle_duration;
     dds_phase_step_fes = (uint32_t)((F_fes * 4294967296.0) / signal.F_s);
+}
+
+void apply_signal_parameters_from_rx(const uint8_t *signal_rx_buf, uint32_t sys_clock)
+{
+    // Decode parameters (copy into locals first to preserve volatile qualifiers)
+    float new_fes_amp;
+    float new_carrier_freq;
+    float new_burst_freq;
+    float new_ramp_up_rate;
+    float new_coast_duration;
+    float new_ramp_down_rate;
+
+    memcpy(&new_fes_amp, signal_rx_buf + 0, sizeof(float));
+    memcpy(&new_carrier_freq, signal_rx_buf + 4, sizeof(float));
+    memcpy(&new_burst_freq, signal_rx_buf + 8, sizeof(float));
+    memcpy(&new_ramp_up_rate, signal_rx_buf + 12, sizeof(float));
+    memcpy(&new_coast_duration, signal_rx_buf + 16, sizeof(float));
+    memcpy(&new_ramp_down_rate, signal_rx_buf + 20, sizeof(float));
+
+    fes_amp = new_fes_amp;
+    carrier_freq = new_carrier_freq;
+    burst_freq = new_burst_freq;
+    ramp_up_rate_v_per_sec = (new_ramp_up_rate > 0.001f) ? new_ramp_up_rate : 0.001f;
+    coast_duration_sec = (new_coast_duration >= 0.0f) ? new_coast_duration : 0.0f;
+    ramp_down_rate_v_per_sec = (new_ramp_down_rate > 0.001f) ? new_ramp_down_rate : 0.001f;
+    parameters_received = true;
+
+    signal.F_burst = burst_freq;
+    signal.F_osc = carrier_freq;
+    init_signalData();
+
+    signal.F_s = signal.F_osc * 100;
+    if (signal.F_s <= 0.0) signal.F_s = 1.0;
+    double division = (double)sys_clock / signal.F_s;
+    unsigned int clkDiv = (division < 1.0) ? 1 : ((division > 65535.0) ? 65535 : (unsigned int)(division + 0.5));
+    pio_sm_set_clkdiv_int_frac(pio, sm, clkDiv, 0);
+
+    dds_phase_acc = 0;
+    dds_phase_acc_burst = 0;
+    dds_phase_acc_fes = 0;
+    signal_samples_remaining = signal_total_samples;
 }
 
 // ====== Output Zero Level (127.5 = 0V) ======
@@ -520,6 +617,12 @@ void fillNextData(void)
 
     for (uint32_t i = 0; i < numOfSamples; i++)
     {
+        if (signal_samples_remaining == 0) {
+            signal_active = false;
+            bufferQueue[bufferIndex][i] = 128;
+            continue;
+        }
+
         // Burst gate from MSB of burst accumulator
         uint8_t A_burst = ( (acc_burst >> 31) == 0 ) ? 1u : 0u;
 
@@ -552,6 +655,8 @@ void fillNextData(void)
         acc_carrier += dds_phase_step_carrier;
         acc_burst += dds_phase_step_burst;
         acc_fes += dds_phase_step_fes;
+
+        signal_samples_remaining--;
     }
 
     dds_phase_acc = acc_carrier;
@@ -585,6 +690,7 @@ void stop_signal_generator()
     dds_phase_acc = 0;
     dds_phase_acc_burst = 0;
     dds_phase_acc_fes = 0;
+    signal_samples_remaining = 0;
     
     // Note: We keep DMA and PIO running, but fillNextData outputs zero level
     // printf("Signal generator now outputting 0V (127.5)\n");
@@ -593,15 +699,19 @@ void stop_signal_generator()
 double fesEnvelope(double fesIndex)
 {
     fesIndex = fesIndex - floor(fesIndex);
-    double phase = 0.25;
-    if (fesIndex < phase)
-        return fesIndex/phase;
-    else if ((fesIndex >= phase) && (fesIndex < (phase * 2)))
+    if (fesIndex < phase_ramp_up_end && phase_ramp_up_end > 1e-9) {
+        return fesIndex / phase_ramp_up_end;
+    }
+    if (fesIndex < phase_coast_end) {
         return 1.0;
-    else if ((fesIndex >= (phase * 2)) && (fesIndex < (phase * 3)))
-        return 1.0 - ((fesIndex - (phase * 2))/phase);
-    else
-        return 0;
+    }
+    if ((phase_ramp_down_end - phase_coast_end) > 1e-9) {
+        double local_phase = (fesIndex - phase_coast_end) / (phase_ramp_down_end - phase_coast_end);
+        if (local_phase < 0.0) local_phase = 0.0;
+        if (local_phase > 1.0) local_phase = 1.0;
+        return 1.0 - local_phase;
+    }
+    return 0.0;
 }
 
 // ====== Configure PIO Clock and Start DMA ======
@@ -655,6 +765,10 @@ int main()
     // Set default values for initialization
     signal.F_burst = 50.0;
     signal.F_osc   = 15000.0;
+    fes_amp = 1.0f;
+    ramp_up_rate_v_per_sec = 1.0f;
+    coast_duration_sec = 1.0f;
+    ramp_down_rate_v_per_sec = 1.0f;
     
     // Initialize signal data structures (but don't start signal yet)
     init_signalData();
@@ -716,6 +830,7 @@ int main()
     // printf("[PICO] SPI0 reset and ready for RPi commands\n");
 
     uint8_t signal_rx_buf[BUF_LEN];
+    uint8_t combined_rx_buf[COMBINED_BUF_LEN];
     uint32_t signal_start_time = 0;
     bool signal_running = false;
 
@@ -743,30 +858,7 @@ int main()
                 // ACK and receive parameter block
                 spi_slave_write_ack_blocking(SIGNAL_PARAMS_CMD);
                 receive_signal_parameter_block(signal_rx_buf);
-                
-                // Decode parameters (copy into locals first to preserve volatile qualifiers)
-                float new_fes_amp;
-                float new_carrier_freq;
-                float new_burst_freq;
-                memcpy(&new_fes_amp, signal_rx_buf + 0, sizeof(float));
-                memcpy(&new_carrier_freq, signal_rx_buf + 4, sizeof(float));
-                memcpy(&new_burst_freq, signal_rx_buf + 8, sizeof(float));
-
-                fes_amp = new_fes_amp;
-                carrier_freq = new_carrier_freq;
-                burst_freq = new_burst_freq;
-                
-                // Update signal
-                signal.F_burst = burst_freq;
-                signal.F_osc = carrier_freq;
-                init_signalData();
-                signal.F_s = signal.F_osc * 100;
-                division = (double)sys_clock / signal.F_s;
-                clkDiv = (division < 1.0) ? 1 : ((division > 65535.0) ? 65535 : (unsigned int)(division + 0.5));
-                pio_sm_set_clkdiv_int_frac(pio, sm, clkDiv, 0);
-                dds_phase_acc = 0;
-                dds_phase_acc_burst = 0;
-                dds_phase_acc_fes = 0;
+                apply_signal_parameters_from_rx(signal_rx_buf, sys_clock);
                 
                 // Start signal
                 signal_active = true;
@@ -786,6 +878,39 @@ int main()
                 spi_set_format(spi0, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
                 
                 // GPIO pins already configured, just flush and prime
+                while (spi_is_readable(spi0)) {
+                    (void)spi_get_hw(spi0)->dr;
+                }
+                spi_slave_write_byte(0x00);
+            }
+            else if (cmd == COMBINED_CONFIG_CMD) {
+                sleep_us(100);
+
+                // ACK and receive 6-byte electrode + 24-byte signal parameter block
+                spi_slave_write_ack_blocking(COMBINED_CONFIG_CMD);
+                receive_combined_configuration_block(combined_rx_buf);
+
+                // First 6 bytes are electrode configuration
+                memcpy(electrode_config, combined_rx_buf, ELECTRODE_BUF_LEN);
+                send_electrode_config_via_spi1();
+
+                // Remaining 24 bytes are signal parameters
+                apply_signal_parameters_from_rx(combined_rx_buf + ELECTRODE_BUF_LEN, sys_clock);
+
+                signal_active = true;
+                signal_running = true;
+                signal_start_time = to_ms_since_boot(get_absolute_time());
+                gpio_put(LED_PIN, 1);
+
+                // Complete FIFO reset after combined reception to avoid stale bytes.
+                sleep_ms(1);
+
+                spi_deinit(spi0);
+                sleep_us(100);
+                spi_init(spi0, 1000000);
+                spi_set_slave(spi0, true);
+                spi_set_format(spi0, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+
                 while (spi_is_readable(spi0)) {
                     (void)spi_get_hw(spi0)->dr;
                 }
@@ -831,67 +956,35 @@ int main()
                 spi_get_hw(spi0)->dr = 0x00;
             }
             else if (cmd == EMERGENCY_STOP_CMD) {
-                // CRITICAL: Capture final amplitude IMMEDIATELY before any processing
-                // current_output_amplitude is only updated in DMA interrupt, so grab it NOW
-                float final_amplitude = current_output_amplitude;
-                
                 // Stop signal generation
                 stop_signal_generator();
                 signal_running = false;
                 gpio_put(LED_PIN, 0);
                 
-                // Small delay to let Pi finish sending 0xFF command
+                // Command-only emergency stop: no amplitude response bytes.
                 sleep_us(100);
                 
-                // Flush any leftover RX bytes from command phase
+                // Flush any leftover RX bytes and prime clean idle byte for next command.
                 while (spi_is_readable(spi0)) {
                     (void)spi_get_hw(spi0)->dr;
                 }
-                
-                // CRITICAL: Wait for RPi's 5ms delay to elapse BEFORE priming bytes
-                // This ensures RPi won't start reading before we're ready
-                // Subtract the 100µs we already waited
-                sleep_us(4400);
-                
-                // Send final amplitude value to RPi (4 bytes)
-                // RPi will read this after emergency stop to display final output voltage
-                uint8_t amp_buf[4];
-                memcpy(amp_buf, &final_amplitude, sizeof(float));
-                
-                // Prime all 4 amplitude bytes into TX FIFO quickly
-                for (int i = 0; i < 4; i++) {
-                    while (!spi_is_writable(spi0)) tight_loop_contents();
-                    spi_get_hw(spi0)->dr = amp_buf[i];
-                }
-                
-                // Wait for RPi to read the 4 amplitude bytes
-                // RPi does 4 transfers with 50µs spacing = ~300µs total
-                sleep_us(500);
-                
-                // NOW drain RPi's 4 dummy TX bytes from the amplitude read
-                while (spi_is_readable(spi0)) {
-                    (void)spi_get_hw(spi0)->dr;
-                }
-                
-                // RPi will now send 20 dummy flush bytes
-                // Wait for those to arrive: 20 bytes × 100µs spacing = ~2ms
-                sleep_us(2500);
-                
-                // Flush the 20 dummy bytes
-                while (spi_is_readable(spi0)) {
-                    (void)spi_get_hw(spi0)->dr;
-                }
-                
-                // Prime clean 0x00 for next command
+
                 while (!spi_is_writable(spi0)) tight_loop_contents();
                 spi_get_hw(spi0)->dr = 0x00;
             }
         }
 
-        // Auto-stop signal after 20 seconds
+        // Stop bookkeeping once one-shot playback has naturally completed.
+        if (signal_running && !signal_active) {
+            signal_running = false;
+            gpio_put(LED_PIN, 0);
+        }
+
+        // Dynamic timeout fallback based on current one-shot duration.
         if (signal_running) {
             uint32_t elapsed = to_ms_since_boot(get_absolute_time()) - signal_start_time;
-            if (elapsed >= 20000) {
+            uint32_t timeout_ms = (uint32_t)(signal_cycle_duration_sec * 1000.0 + 10.0);
+            if (elapsed >= timeout_ms) {
                 stop_signal_generator();
                 signal_running = false;
                 gpio_put(LED_PIN, 0);
