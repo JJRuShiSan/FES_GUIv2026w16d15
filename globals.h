@@ -7,4 +7,9 @@
 extern QMap<int,int> savedClickState;
 extern QVector<int> savedSelected;
 
+extern double savedAmplitude;
+extern double savedRampUp;
+extern double savedCoast;
+extern double savedRampDown;
+
 #endif

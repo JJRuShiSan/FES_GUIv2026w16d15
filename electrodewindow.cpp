@@ -7,6 +7,10 @@
 // DEFINE the globals exactly once here
 QVector<int> savedSelected;
 QMap<int,int> savedClickState;
+double savedAmplitude = 1.0;
+double savedRampUp = 1.0;
+double savedCoast = 1.0;
+double savedRampDown = 1.0;
 
 #include <QFont>
 #include <QMessageBox>

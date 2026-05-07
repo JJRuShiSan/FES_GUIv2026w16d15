@@ -127,6 +127,10 @@ void HistoryWindow::onEndSessionClicked() {
     g_setAmplitude = 0.0;
     g_latestAmplitude = 0.0;
     lastAmplitude = 1.0;
+    savedAmplitude = 1.0;
+    savedRampUp = 1.0;
+    savedCoast = 1.0;
+    savedRampDown = 1.0;
 
     savedClickState.clear();
     savedSelected.clear();

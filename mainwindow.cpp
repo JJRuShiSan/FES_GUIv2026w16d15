@@ -98,7 +98,11 @@ MainWindow::MainWindow(QWidget *parent)
 {
     setWindowTitle("FES_2025");
     this->setCursor(Qt::BlankCursor);
-    amplitude = HistoryWindow::lastAmplitude;
+    amplitude = savedAmplitude;
+    rampUp = savedRampUp;
+    coast = savedCoast;
+    rampDown = savedRampDown;
+    HistoryWindow::lastAmplitude = amplitude;
 
     // ── Root widget ───────────────────────────────────────────────────────
     QWidget *central = new QWidget(this);
@@ -301,11 +305,21 @@ void MainWindow::loadImages(const QString &carrierPath, const QString &amPath) {
 void MainWindow::updateAmplitudeDisplay() {
     amplitudeDisplay->setText(QString::number(amplitude, 'f', 2) + " V");
     emit amplitudeChanged(amplitude);
+    savedAmplitude = amplitude;
     HistoryWindow::lastAmplitude = amplitude;
 }
-void MainWindow::updateRampUpDisplay()   { rampUpDisplay->setText(  QString::number(rampUp,   'f', 2) + " V/s"); }
-void MainWindow::updateCoastDisplay()    { coastDisplay->setText(   QString::number(coast,     'f', 2) + " s");   }
-void MainWindow::updateRampDownDisplay() { rampDownDisplay->setText(QString::number(rampDown,  'f', 2) + " V/s"); }
+void MainWindow::updateRampUpDisplay() {
+    rampUpDisplay->setText(QString::number(rampUp, 'f', 2) + " V/s");
+    savedRampUp = rampUp;
+}
+void MainWindow::updateCoastDisplay() {
+    coastDisplay->setText(QString::number(coast, 'f', 2) + " s");
+    savedCoast = coast;
+}
+void MainWindow::updateRampDownDisplay() {
+    rampDownDisplay->setText(QString::number(rampDown, 'f', 2) + " V/s");
+    savedRampDown = rampDown;
+}
 
 // =============================================================
 // Clamp helpers
